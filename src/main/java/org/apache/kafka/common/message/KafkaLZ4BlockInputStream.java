@@ -39,6 +39,7 @@ import net.jpountz.xxhash.XXHashFactory;
  * A partial implementation of the v1.4.1 LZ4 Frame format.
  * 
  * @see <a href="https://docs.google.com/document/d/1Tdxmn5_2e5p1y4PtXkatLndWVb0R8QARJFe6JI4Keuo/edit">LZ4 Framing Format Spec</a>
+ * 参见KafkaLZ4BlockOutputStream,因为该类流程与KafkaLZ4BlockOutputStream是相反逻辑
  */
 public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 

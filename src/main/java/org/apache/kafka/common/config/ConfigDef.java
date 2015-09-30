@@ -24,28 +24,42 @@ import java.util.Map;
  * This class is used for specifying the set of expected configurations, their type, their defaults, their
  * documentation, and any special validation logic used for checking the correctness of the values the user provides.
  * <p>
+ * 这个类被用于说明配置集合,包含name、value、类型、描述信息、Validator(逻辑校验信息)、Importance属性价值(即优先级)
+ * 
  * Usage of this class looks something like this:
  * 
  * <pre>
+ * 
+ * 定义一些属性
  * ConfigDef defs = new ConfigDef();
  * defs.define(&quot;config_name&quot;, Type.STRING, &quot;default string value&quot;, &quot;This configuration is used for blah blah blah.&quot;);
  * defs.define(&quot;another_config_name&quot;, Type.INT, 42, Range.atLeast(0), &quot;More documentation on this config&quot;);
  * 
+ * 使用Properties重新为属性该值
  * Properties props = new Properties();
  * props.setProperty(&quot;config_name&quot;, &quot;some value&quot;);
  * Map&lt;String, Object&gt; configs = defs.parse(props);
  * 
+ * 通过key获取最终修改后的属性值
  * String someConfig = (String) configs.get(&quot;config_name&quot;); // will return &quot;some value&quot;
  * int anotherConfig = (Integer) configs.get(&quot;another_config_name&quot;); // will return default value of 42
  * </pre>
  * 
  * This class can be used stand-alone or in combination with {@link AbstractConfig} which provides some additional
  * functionality for accessing configs.
+ * 
+ *     public enum Type {
+        BOOLEAN, STRING, INT, LONG, DOUBLE, 
+        LIST,//字符串按照空格拆分,组装成一个List集合
+        CLASS;//属性值是class对象,或者class类的全路径
+    }
+    
  */
 public class ConfigDef {
 
     private static final Object NO_DEFAULT_VALUE = new String("");
 
+    //key:配置项的name,value为配置的具体信息
     private final Map<String, ConfigKey> configKeys = new HashMap<String, ConfigKey>();
 
     /**
@@ -112,15 +126,16 @@ public class ConfigDef {
      * @param props The configs to parse and validate
      * @return Parsed and validated configs. The key will be the config name and the value will be the value parsed into
      *         the appropriate type (int, string, etc)
+     * 对所有的key对应的value重新赋值,该新的值是从参数Map中获取的        
      */
     public Map<String, Object> parse(Map<?, ?> props) {
         /* parse all known keys */
         Map<String, Object> values = new HashMap<String, Object>();
         for (ConfigKey key : configKeys.values()) {
             Object value;
-            if (props.containsKey(key.name))
+            if (props.containsKey(key.name))//重新为key为name的赋值
                 value = parseType(key.name, props.get(key.name), key.type);
-            else if (key.defaultValue == NO_DEFAULT_VALUE)
+            else if (key.defaultValue == NO_DEFAULT_VALUE)//不允许为空的默认值
                 throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
             else
                 value = key.defaultValue;
@@ -135,6 +150,7 @@ public class ConfigDef {
      * @param value The config value
      * @param type The expected type
      * @return The parsed object
+     * 将value按照Type类型转换成新的对象,返回
      */
     private Object parseType(String name, Object value, Type type) {
         try {
@@ -185,7 +201,7 @@ public class ConfigDef {
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
                         else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));//字符串按照空格拆分
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
@@ -206,12 +222,15 @@ public class ConfigDef {
     }
 
     /**
-     * The config types
+     * The config types 属性类型
      */
     public enum Type {
-        BOOLEAN, STRING, INT, LONG, DOUBLE, LIST, CLASS;
+        BOOLEAN, STRING, INT, LONG, DOUBLE, 
+        LIST,//字符串按照空格拆分,组装成一个List集合
+        CLASS;//属性值是class对象,或者class类的全路径
     }
 
+    //属性的价值
     public enum Importance {
         HIGH, MEDIUM, LOW
     }
@@ -225,6 +244,7 @@ public class ConfigDef {
 
     /**
      * Validation logic for numeric ranges
+     * 校验值在min与max之间即可,区间是(min,max)开区间,且校验的参数必须是Number类型参数
      */
     public static class Range implements Validator {
         private final Number min;
@@ -238,6 +258,7 @@ public class ConfigDef {
         /**
          * A numeric range that checks only the lower bound
          * @param min The minimum acceptable value
+         * 仅仅校验最小值即可
          */
         public static Range atLeast(Number min) {
             return new Range(min, null);
@@ -268,6 +289,9 @@ public class ConfigDef {
         }
     }
 
+    /**
+     * 校验参数必须是String类型的,并且必须是在参数validStrings集合中存在的String才允许通过
+     */
   public static class ValidString implements Validator {
     List<String> validStrings;
 
@@ -310,13 +334,14 @@ public class ConfigDef {
     }
   }
 
+  //该对象对应一组配置信息
     private static class ConfigKey {
         public final String name;
         public final Type type;
         public final String documentation;
         public final Object defaultValue;
         public final Validator validator;
-        public final Importance importance;
+        public final Importance importance;//该属性的价值
 
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
             super();
@@ -325,7 +350,7 @@ public class ConfigDef {
             this.defaultValue = defaultValue;
             this.validator = validator;
             this.importance = importance;
-            if (this.validator != null)
+            if (this.validator != null)//对数据默认值进行校验
                 this.validator.ensureValid(name, defaultValue);
             this.documentation = documentation;
         }
@@ -336,8 +361,9 @@ public class ConfigDef {
 
     }
 
+    //HTML形式输出所有key-value配置信息
     public String toHtmlTable() {
-        // sort first required fields, then by importance, then name
+        // sort first required fields, then by importance, then name 按照属性的优先级排序,优先级相同的按照name排序
         List<ConfigDef.ConfigKey> configs = new ArrayList<ConfigDef.ConfigKey>(this.configKeys.values());
         Collections.sort(configs, new Comparator<ConfigDef.ConfigKey>() {
             public int compare(ConfigDef.ConfigKey k1, ConfigDef.ConfigKey k2) {

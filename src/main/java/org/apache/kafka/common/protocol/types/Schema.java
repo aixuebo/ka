@@ -18,12 +18,14 @@ import java.util.Map;
 
 /**
  * The schema for a compound record definition
+ * 一个schema 表示一组field集合
  */
 public class Schema extends Type {
 
-    private final Field[] fields;
-    private final Map<String, Field> fieldsByName;
+    private final Field[] fields;//field集合
+    private final Map<String, Field> fieldsByName;//name与field对应关系
 
+    //初始化该Schema对应的所有Field
     public Schema(Field... fs) {
         this.fields = new Field[fs.length];
         this.fieldsByName = new HashMap<String, Field>();

@@ -31,6 +31,7 @@ public class NetworkSend extends ByteBufferSend {
         int size = 0;
         for (int i = 0; i < buffers.length; i++)
             size += buffers[i].remaining();
+        //多加一个ByteBuffer,该ByteBuffer存储一共需要发送多少个字节
         ByteBuffer[] delimited = new ByteBuffer[buffers.length + 1];
         delimited[0] = ByteBuffer.allocate(4);
         delimited[0].putInt(size);

@@ -20,15 +20,17 @@ import java.nio.ByteBuffer;
 
 /**
  * Represents a type for an array of a particular type
+ * 数组,但是数组的元素必须是同一个类型的
  */
 public class ArrayOf extends Type {
 
-    private final Type type;
+    private final Type type;//数组的类型
 
     public ArrayOf(Type type) {
         this.type = type;
     }
 
+    //将数组全部信息都写入到buffer中
     @Override
     public void write(ByteBuffer buffer, Object o) {
         Object[] objs = (Object[]) o;
@@ -38,6 +40,7 @@ public class ArrayOf extends Type {
             type.write(buffer, objs[i]);
     }
 
+    //从ByteBuffer中读取数组,即读取多个元素,组成集合
     @Override
     public Object read(ByteBuffer buffer) {
         int size = buffer.getInt();
@@ -47,6 +50,7 @@ public class ArrayOf extends Type {
         return objs;
     }
 
+    //数组中所有的元素总大小
     @Override
     public int sizeOf(Object o) {
         Object[] objs = (Object[]) o;

@@ -18,17 +18,18 @@ package org.apache.kafka.common.protocol.types;
 
 /**
  * A field in a schema
+ * schema中的一个域
  */
 public class Field {
 
     public static final Object NO_DEFAULT = new Object();
 
-    final int index;
+    final int index;//在schema中的序号
     public final String name;
-    public final Type type;
-    public final Object defaultValue;
-    public final String doc;
-    final Schema schema;
+    public final Type type;//类型
+    public final Object defaultValue;//默认值
+    public final String doc;//描述信息
+    final Schema schema;//对应的schema对象
 
     public Field(int index, String name, Type type, String doc, Object defaultValue, Schema schema) {
         this.index = index;
