@@ -18,6 +18,9 @@ package org.apache.kafka.common;
 
 /**
  * A topic name and partition number
+ * 记录一个topic与属于该topic的第几个partition
+ * 
+ * kafka可以使数据写入一个topic,但是该topic可以写入多个partition
  */
 public final class TopicPartition {
 

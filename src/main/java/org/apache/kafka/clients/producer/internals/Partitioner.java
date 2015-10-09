@@ -28,10 +28,16 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * The default partitioning strategy:
+ * 默认的Partitione策略
  * <ul>
  * <li>If a partition is specified in the record, use it
  * <li>If no partition is specified but a key is present choose a partition based on a hash of the key
  * <li>If no partition or key is present choose a partition in a round-robin fashion
+ * 理论上ProducerRecord包含key-value,以及要将其存储到哪个topic和partition里面
+ * 
+ * 当partition指定了,则就将key-value其存储到该partition中即可
+ * 当partition没有被指定,则基于key进行hash,找到对应的partition即可
+ * 当partition没有被指定,key=null,则用自增长作为key,对partition去摩
  */
 public class Partitioner {
 
@@ -42,17 +48,20 @@ public class Partitioner {
      * 
      * @param record The record being sent
      * @param cluster The current cluster metadata
+     * 根据策略返回该ProducerRecord要存储到第几个partition上
      */
     public int partition(ProducerRecord<byte[], byte[]> record, Cluster cluster) {
+    	//通过topic获取该topic对应的partition集合
         List<PartitionInfo> partitions = cluster.partitionsForTopic(record.topic());
+        
         int numPartitions = partitions.size();
-        if (record.partition() != null) {
+        if (record.partition() != null) {//当partition指定了,则就将key-value其存储到该partition中即可
             // they have given us a partition, use it
             if (record.partition() < 0 || record.partition() >= numPartitions)
                 throw new IllegalArgumentException("Invalid partition given with record: " + record.partition()
                                                    + " is not in the range [0..."
                                                    + numPartitions
-                                                   + "].");
+                                                   + "].");//校验partition的合法性
             return record.partition();
         } else if (record.key() == null) {
             int nextValue = counter.getAndIncrement();

@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * The accumulator uses a bounded amount of memory and append calls will block when that memory is exhausted, unless
  * this behavior is explicitly disabled.
+ * 记录积累器
  */
 public final class RecordAccumulator {
 

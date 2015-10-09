@@ -35,6 +35,7 @@ public interface Deserializer<T> {
      * @param topic topic associated with the data
      * @param data serialized bytes
      * @return deserialized object
+     * 从topic中反序列化data字节数组成一个对象
      */
     public T deserialize(String topic, byte[] data);
 

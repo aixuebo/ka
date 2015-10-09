@@ -35,6 +35,7 @@ public interface Serializer<T> {
      * @param topic topic associated with data
      * @param data typed data
      * @return serialized bytes
+     * 将data数据序列化到topic中
      */
     public byte[] serialize(String topic, T data);
 

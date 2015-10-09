@@ -125,7 +125,9 @@ public class ProducerConfig extends AbstractConfig {
     public static final String RECEIVE_BUFFER_CONFIG = "receive.buffer.bytes";
     private static final String RECEIVE_BUFFER_DOC = "The size of the TCP receive buffer to use when reading data";
 
-    /** <code>max.request.size</code> */
+    /** <code>max.request.size</code> 
+     * 每一次key-value进行序列化后的字节最大传输大小
+     * */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
     private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request. This is also effectively a cap on the maximum record size. Note that the server " + "has its own cap on record size which may be different from this. This setting will limit the number of record "
                                                        + "batches the producer will send in a single request to avoid sending huge requests.";
@@ -172,11 +174,11 @@ public class ProducerConfig extends AbstractConfig {
     public static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = "max.in.flight.requests.per.connection";
     private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking.";
 
-    /** <code>key.serializer</code> */
+    /** <code>key.serializer</code> 对key进行序列化的class对象,将key转换成字节数组*/
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
     private static final String KEY_SERIALIZER_CLASS_DOC = "Serializer class for key that implements the <code>Serializer</code> interface.";
 
-    /** <code>value.serializer</code> */
+    /** <code>value.serializer</code> 对value进行序列化的class对象,将value转换成字节数组*/
     public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
     private static final String VALUE_SERIALIZER_CLASS_DOC = "Serializer class for value that implements the <code>Serializer</code> interface.";
 

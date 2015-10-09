@@ -24,11 +24,17 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * A record: a serialized key and value along with the associated CRC and other fields
+ * 记录一个key-value的字节数组,以及压缩方式
+ * 注意:
+ * 1.key可以是null
+ * 2.value不允许是null
+ * 3.压缩方式默认是0,即不支持压缩
  */
 public final class Record {
 
     /**
      * The current offset and size for all the fixed-length fields
+     * 格式:4个字节crc、1个字节MAGIC、1个字节ATTRIBUTE、4个字节KEY_SIZE_LENGTH、4个字节VALUE_SIZE_LENGTH
      */
     public static final int CRC_OFFSET = 0;
     public static final int CRC_LENGTH = 4;
@@ -43,16 +49,19 @@ public final class Record {
 
     /**
      * The size for the record header
+     * 头文件占用6个字节,分别是 4个字节crc、1个字节MAGIC、1个字节ATTRIBUTE
      */
     public static final int HEADER_SIZE = CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH;
 
     /**
      * The amount of overhead bytes in a record
+     * 除了key-value的字节数组外,还要多加14个字节,分别是:4个字节crc、1个字节MAGIC、1个字节ATTRIBUTE、4个字节KEY_SIZE_LENGTH、4个字节VALUE_SIZE_LENGTH
      */
     public static final int RECORD_OVERHEAD = HEADER_SIZE + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
 
     /**
      * The current "magic" value
+     * 当前magic所占用的一个字节内容是0
      */
     public static final byte CURRENT_MAGIC_VALUE = 0;
 
@@ -83,12 +92,16 @@ public final class Record {
      * @param type The compression type used on the contents of the record (if any)
      * @param valueOffset The offset into the payload array used to extract payload
      * @param valueSize The size of the payload to use
+     * 
+     * valueOffset和valueSize二选一，作为value值的获取方式
+     * 1.valueSize>=0,说明从valueOffset开始,要从value中获取valueSize个字节,相当于write(value,valueOffset,valueSize)
+     * 2.valueSize<0,说明从valueOffset开始到value的最后都是该value信息,相当于write(value,valueOffset,value.length-valueOffset)
      */
     public Record(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
         this(ByteBuffer.allocate(recordSize(key == null ? 0 : key.length,
             value == null ? 0 : valueSize >= 0 ? valueSize : value.length - valueOffset)));
         write(this.buffer, key, value, type, valueOffset, valueSize);
-        this.buffer.rewind();
+        this.buffer.rewind();//重新将position位置设置成0,即相当于重新开始写入buffer
     }
 
     public Record(byte[] key, byte[] value, CompressionType type) {
@@ -103,6 +116,7 @@ public final class Record {
         this(key, value, CompressionType.NONE);
     }
 
+    //默认是不压缩,可以可以设置为null
     public Record(byte[] value) {
         this(null, value, CompressionType.NONE);
     }
@@ -116,6 +130,18 @@ public final class Record {
         compressor.putRecord(key, value, type, valueOffset, valueSize);
     }
 
+    /**
+     * @param compressor
+     * @param crc
+     * @param attributes
+     * @param key
+     * @param value
+     * @param valueOffset
+     * @param valueSize
+     * valueOffset和valueSize二选一，作为value值的获取方式
+     * 1.valueSize>=0,说明从valueOffset开始,要从value中获取valueSize个字节,相当于write(value,valueOffset,valueSize)
+     * 2.valueSize<0,说明从valueOffset开始到value的最后都是该value信息,相当于write(value,valueOffset,value.length-valueOffset)
+     */
     public static void write(Compressor compressor, long crc, byte attributes, byte[] key, byte[] value, int valueOffset, int valueSize) {
         // write crc
         compressor.putInt((int) (crc & 0xffffffffL));
@@ -144,6 +170,12 @@ public final class Record {
         return recordSize(key == null ? 0 : key.length, value == null ? 0 : value.length);
     }
 
+    /**
+     * @param keySize key所占用的字节数组长度
+     * @param valueSize value所占用的字节数组长度
+     * @return 要存储该key-value需要的总字节数
+     * 4个字节crc、1个字节MAGIC、1个字节ATTRIBUTE、4个字节KEY_SIZE_LENGTH、4个字节VALUE_SIZE_LENGTH
+     */
     public static int recordSize(int keySize, int valueSize) {
         return CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH + KEY_SIZE_LENGTH + keySize + VALUE_SIZE_LENGTH + valueSize;
     }
@@ -152,6 +184,7 @@ public final class Record {
         return this.buffer;
     }
 
+    //根据压缩类型的mask,计算attributes
     public static byte computeAttributes(CompressionType type) {
         byte attributes = 0;
         if (type.id > 0)
@@ -161,6 +194,7 @@ public final class Record {
 
     /**
      * Compute the checksum of the record from the record contents
+     * 计算校验和
      */
     public static long computeChecksum(ByteBuffer buffer, int position, int size) {
         Crc32 crc = new Crc32();
@@ -170,6 +204,7 @@ public final class Record {
 
     /**
      * Compute the checksum of the record from the attributes, key and value payloads
+     * 计算校验和
      */
     public static long computeChecksum(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
         Crc32 crc = new Crc32();
@@ -199,6 +234,7 @@ public final class Record {
 
     /**
      * Compute the checksum of the record from the record contents
+     * 计算抛出crc4个字节位置后的数据,进行校验和运算
      */
     public long computeChecksum() {
         return computeChecksum(buffer, MAGIC_OFFSET, buffer.limit() - MAGIC_OFFSET);
@@ -206,6 +242,7 @@ public final class Record {
 
     /**
      * Retrieve the previously computed CRC for this record
+     * 读取校验和
      */
     public long checksum() {
         return Utils.readUnsignedInt(buffer, CRC_OFFSET);
@@ -213,6 +250,7 @@ public final class Record {
 
     /**
      * Returns true if the crc stored with the record matches the crc computed off the record contents
+     * 计算校验和是否相同
      */
     public boolean isValid() {
         return checksum() == computeChecksum();
@@ -220,6 +258,7 @@ public final class Record {
 
     /**
      * Throw an InvalidRecordException if isValid is false for this record
+     * 确保校验和是正确的
      */
     public void ensureValid() {
         if (!isValid())
@@ -231,6 +270,7 @@ public final class Record {
 
     /**
      * The complete serialized size of this record in bytes (including crc, header attributes, etc)
+     * buffer中的数据存储的字节数
      */
     public int size() {
         return buffer.limit();
@@ -238,6 +278,7 @@ public final class Record {
 
     /**
      * The length of the key in bytes
+     * key的字节数
      */
     public int keySize() {
         return buffer.getInt(KEY_SIZE_OFFSET);
@@ -245,6 +286,7 @@ public final class Record {
 
     /**
      * Does the record have a key?
+     * 是否存在key的字节,即可以是否为null,如果为null,则key的位置写入的值是-1
      */
     public boolean hasKey() {
         return keySize() >= 0;
@@ -252,6 +294,7 @@ public final class Record {
 
     /**
      * The position where the value size is stored
+     * 获取buffer中存储value的字节数的数据位置,即key的数据位置+key的数据大小
      */
     private int valueSizeOffset() {
         return KEY_OFFSET + Math.max(0, keySize());
@@ -259,6 +302,7 @@ public final class Record {
 
     /**
      * The length of the value in bytes
+     * 获取value对应的字节数
      */
     public int valueSize() {
         return buffer.getInt(valueSizeOffset());
@@ -266,6 +310,7 @@ public final class Record {
 
     /**
      * The magic version of this record
+     * 获取magic所对应的一个字节
      */
     public byte magic() {
         return buffer.get(MAGIC_OFFSET);
@@ -273,13 +318,15 @@ public final class Record {
 
     /**
      * The attributes stored with this record
+     * 获取attribute所对应的一个字节
      */
     public byte attributes() {
         return buffer.get(ATTRIBUTES_OFFSET);
     }
 
     /**
-     * The compression type used with this record
+     * The compression type used with this record、
+     * 获取压缩方式
      */
     public CompressionType compressionType() {
         return CompressionType.forId(buffer.get(ATTRIBUTES_OFFSET) & COMPRESSION_CODEC_MASK);
@@ -287,6 +334,8 @@ public final class Record {
 
     /**
      * A ByteBuffer containing the value of this record
+     * 获取value对应的ByteBuffer
+     * 参数是value对应的字节数的位置
      */
     public ByteBuffer value() {
         return sliceDelimited(valueSizeOffset());
@@ -294,6 +343,8 @@ public final class Record {
 
     /**
      * A ByteBuffer containing the message key
+     *  获取key对应的ByteBuffer
+     *  参数是key对应的字节数的位置
      */
     public ByteBuffer key() {
         return sliceDelimited(KEY_SIZE_OFFSET);

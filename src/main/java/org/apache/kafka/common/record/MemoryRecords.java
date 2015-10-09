@@ -28,15 +28,17 @@ import org.apache.kafka.common.utils.AbstractIterator;
 public class MemoryRecords implements Records {
 
     private final Compressor compressor;
-    private final int capacity;
-    private final int sizeLimit;
     private ByteBuffer buffer;
+    
+    private final int capacity;//ByteBuffer的总容量
+    private final int sizeLimit;//表示未压缩的数据不允许超出该限制
+    
     private boolean writable;
 
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int sizeLimit) {
         this.writable = writable;
-        this.capacity = buffer.capacity();
+        this.capacity = buffer.capacity();//ByteBuffer的总容量
         this.sizeLimit = sizeLimit;
         if (this.writable) {
             this.buffer = null;
@@ -61,9 +63,10 @@ public class MemoryRecords implements Records {
 
     /**
      * Append the given record and offset to the buffer
+     * 添加一条记录
      */
     public void append(long offset, Record record) {
-        if (!writable)
+        if (!writable)//必须是向Compressor中写入数据
             throw new IllegalStateException("Memory records is not writable");
 
         int size = record.size();
@@ -71,7 +74,7 @@ public class MemoryRecords implements Records {
         compressor.putInt(size);
         compressor.put(record.buffer());
         compressor.recordWritten(size + Records.LOG_OVERHEAD);
-        record.buffer().rewind();
+        record.buffer().rewind();//重新设置buffer的position到0位置
     }
 
     /**
@@ -90,10 +93,11 @@ public class MemoryRecords implements Records {
 
     /**
      * Check if we have room for a new record containing the given key/value pair
-     * 
+     * 检查是否有空间存放key-value
      * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
      * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
+     * 注意该返回值是检查预估值,当使用压缩算法的时候是不能准确的计算的
      *
      * Also note that besides the records' capacity, there is also a size limit for the batch. This size limit may be
      * smaller than the capacity (e.g. when appending a single message whose size is larger than the batch size, the
@@ -102,8 +106,8 @@ public class MemoryRecords implements Records {
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
         return this.writable &&
-            this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value) &&
-            this.sizeLimit >= this.compressor.estimatedBytesWritten();
+            this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value) && //表示容量是够存储该key-value以及未压缩的数据的
+            this.sizeLimit >= this.compressor.estimatedBytesWritten();//未压缩的数据是没有超出sizeLimit限制的
     }
 
     public boolean isFull() {

@@ -23,6 +23,9 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 public class ProtoUtils {
 
+	/**
+	 * 获取二维数组信息,Schema[apiKey][version]
+	 */
     private static Schema schemaFor(Schema[][] schemas, int apiKey, int version) {
         if (apiKey < 0 || apiKey > schemas.length)
             throw new IllegalArgumentException("Invalid api key: " + apiKey);

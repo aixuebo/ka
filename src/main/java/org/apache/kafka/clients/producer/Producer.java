@@ -36,8 +36,8 @@ public interface Producer<K,V> extends Closeable {
     /**
      * Send the given record asynchronously and return a future which will eventually contain the response information.
      * 
-     * @param record The record to send
-     * @return A future which will eventually contain the response information
+     * @param record The record to send 表示将key-value写入到指定topic中某个partition里面
+     * @return A future which will eventually contain the response information  表示该key-value被写入到哪个topic的哪个partion上了,以及该partion上的偏移量位置
      */
     public Future<RecordMetadata> send(ProducerRecord<K,V> record);
 

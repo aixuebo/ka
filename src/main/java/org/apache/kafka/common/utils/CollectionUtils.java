@@ -25,8 +25,10 @@ public class CollectionUtils {
      * @param data Data to be partitioned
      * @param <T> Partition data type
      * @return partitioned data
+     * 类型转换,转换结果是Map<String, Map<Integer, T>>,其中key是topic,value是一个map,key是partition,value是真正存储的数据泛型T
      */
     public static <T> Map<String, Map<Integer, T>> groupDataByTopic(Map<TopicPartition, T> data) {
+    	//key是topic,value是一个map,key是partition,value是真正存储的数据泛型T
         Map<String, Map<Integer, T>> dataByTopic = new HashMap<String, Map<Integer, T>>();
         for (Map.Entry<TopicPartition, T> entry: data.entrySet()) {
             String topic = entry.getKey().topic();
@@ -45,6 +47,7 @@ public class CollectionUtils {
      * group partitions by topic
      * @param partitions
      * @return partitions per topic
+     * 类型转换,转换结果是Map<String, List<Integer>>,其中key是topic,value是该topic对应的partition集合
      */
     public static Map<String, List<Integer>> groupDataByTopic(List<TopicPartition> partitions) {
         Map<String, List<Integer>> partitionsByTopic = new HashMap<String, List<Integer>>();

@@ -31,10 +31,10 @@ import java.util.zip.GZIPOutputStream;
 public class Compressor {
 
     static private final float COMPRESSION_RATE_DAMPING_FACTOR = 0.9f;
-    static private final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
-    static private final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;
+    static private final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;//压缩比预估因子
+    static private final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;//默认压缩的buffer缓冲区大小
 
-    private static float[] typeToRate;
+    private static float[] typeToRate;//通过ID可以获取对应的压缩方式对应的rate
     private static int MAX_TYPE_ID = -1;
 
     static {
@@ -50,14 +50,14 @@ public class Compressor {
     private final CompressionType type;
     private final DataOutputStream appendStream;
     private final ByteBufferOutputStream bufferStream;
-    private final int initPos;
+    private final int initPos;//该buffer传进来时候的初始化position位置
 
-    public long writtenUncompressed;
-    public long numRecords;
+    public long writtenUncompressed;//写入的尚未压缩的字节数
+    public long numRecords;//写入多少条记录Record
 
     public Compressor(ByteBuffer buffer, CompressionType type, int blockSize) {
         this.type = type;
-        this.initPos = buffer.position();
+        this.initPos = buffer.position();//记录该buffer传进来时候的初始化position位置
 
         this.numRecords = 0;
         this.writtenUncompressed = 0;
@@ -96,13 +96,14 @@ public class Compressor {
             throw new KafkaException(e);
         }
 
+        //在buffer的initPos位置写入8个字节的long类型的numRecords记录数、4个字节的int类型的数据所占用字节大小
         if (type != CompressionType.NONE) {
             ByteBuffer buffer = bufferStream.buffer();
             int pos = buffer.position();
             // write the header, for the end offset write as number of records - 1
             buffer.position(initPos);
-            buffer.putLong(numRecords - 1);
-            buffer.putInt(pos - initPos - Records.LOG_OVERHEAD);
+            buffer.putLong(numRecords - 1);//8个字节的long类型的numRecords记录数
+            buffer.putInt(pos - initPos - Records.LOG_OVERHEAD);//4个字节的int类型的数据所占用字节大小
             // write the shallow message (the crc and value size are not correct yet)
             Record.write(buffer, null, null, type, 0, -1);
             // compute the fill the value size
@@ -182,22 +183,23 @@ public class Compressor {
         Record.write(this, crc, attributes, key, value, valueOffset, valueSize);
     }
 
+    //计算汇总信息
     public void recordWritten(int size) {
         numRecords += 1;
         writtenUncompressed += size;
     }
 
+    //预估写入的字节数
     public long estimatedBytesWritten() {
-        if (type == CompressionType.NONE) {
+        if (type == CompressionType.NONE) {//如果不压缩,则返回当前的position位置就是字节数
             return bufferStream.buffer().position();
         } else {
-            // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
+            // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes 未压缩的字节数*压缩比例*预估因子就是预估值
             return (long) (writtenUncompressed * typeToRate[type.id] * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
     }
 
     // the following two functions also need to be public since they are used in MemoryRecords.iteration
-
     static public DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, int bufferSize) {
         try {
             switch (type) {

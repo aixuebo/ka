@@ -19,6 +19,11 @@ package org.apache.kafka.clients.producer;
  * If a valid partition number is specified that partition will be used when sending the record. If no partition is
  * specified but a key is present a partition will be chosen using a hash of the key. If neither key nor partition is
  * present a partition will be assigned in a round-robin fashion.
+ * 将一个key-value信息,将该信息存储到哪个topic和partition下
+ * 注意:
+ * 1.key可以是null
+ * 2.partition也可以为null
+ * 3.但是topic和value一定不是null
  */
 public final class ProducerRecord<K, V> {
 

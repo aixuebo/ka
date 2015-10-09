@@ -20,11 +20,13 @@ import org.apache.kafka.common.TopicPartition;
 
 /**
  * The metadata for a record that has been acknowledged by the server
+ * 该key-value被写入到哪个topic的哪个partion上了,以及该partion上的偏移量位置
+ * 该对象属于producer请求写入key-value后的返回值对象
  */
 public final class RecordMetadata {
 
-    private final long offset;
-    private final TopicPartition topicPartition;
+    private final long offset;//该key-value被写入到哪个topic的哪个partion上的偏移量位置
+    private final TopicPartition topicPartition;//该key-value被写入到哪个topic的哪个partion上了
 
     private RecordMetadata(TopicPartition topicPartition, long offset) {
         super();

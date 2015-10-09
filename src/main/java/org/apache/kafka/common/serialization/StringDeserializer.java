@@ -34,6 +34,9 @@ public class StringDeserializer implements Deserializer<String> {
             encoding = (String) encodingValue;
     }
 
+    /**
+     * 将data字节数组反序列化成UTF-8类型的字符串
+     */
     @Override
     public String deserialize(String topic, byte[] data) {
         try {

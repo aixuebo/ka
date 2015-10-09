@@ -29,6 +29,7 @@ public interface Callback {
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset). Null if an error
      *        occurred.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
+     * 回调函数,当producer写入key-value到指定topic-partition后,会触发该方法,传入返回值RecordMetadata和异常对象
      */
     public void onCompletion(RecordMetadata metadata, Exception exception);
 }

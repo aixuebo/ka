@@ -36,13 +36,16 @@ public enum ApiKeys {
     JOIN_GROUP(11, "join_group"),
     HEARTBEAT(12, "heartbeat");
 
-    private static ApiKeys[] codeToType;
-    public static int MAX_API_KEY = -1;
+    private static ApiKeys[] codeToType;//根据ID作为数组下标,value为该ID对应的ApiKeys对象
+    public static int MAX_API_KEY = -1;//最大的id
 
     static {
+    	//寻找最大的ID
         for (ApiKeys key : ApiKeys.values()) {
             MAX_API_KEY = Math.max(MAX_API_KEY, key.id);
         }
+        
+        //根据ID作为数组下标,value为该ID对应的ApiKeys对象
         codeToType = new ApiKeys[MAX_API_KEY+1];
         for (ApiKeys key : ApiKeys.values()) {
             codeToType[key.id] = key;

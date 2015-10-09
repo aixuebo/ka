@@ -59,12 +59,13 @@ import org.slf4j.LoggerFactory;
  * <p>
  * The producer manages a single background thread that does I/O as well as a TCP connection to each of the brokers it
  * needs to communicate with. Failure to close the producer after use will leak these resources.
+ * 将key-value进行序列化成字节数组,发送到指定topic和partition对应的node上
  */
 public class KafkaProducer<K,V> implements Producer<K,V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
 
-    private final Partitioner partitioner;
+    private final Partitioner partitioner;//为key-value选择partion的策略
     private final int maxRequestSize;
     private final long metadataFetchTimeoutMs;
     private final long totalMemorySize;
@@ -73,12 +74,17 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
     private final Sender sender;
     private final Metrics metrics;
     private final Thread ioThread;
-    private final CompressionType compressionType;
+    private final CompressionType compressionType;//压缩类型
     private final Sensor errors;
     private final Time time;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valueSerializer;
-    private final ProducerConfig producerConfig;
+    
+    //将key-value进行序列化成字节数组,发送到指定topic和partition对应的node上
+    private final Serializer<K> keySerializer;//key的序列化对象
+    private final Serializer<V> valueSerializer;//value的序列化对象
+    
+    
+    private final ProducerConfig producerConfig;//全局配置对象
+    
     private static final AtomicInteger producerAutoId = new AtomicInteger(1);
 
     /**
@@ -109,6 +115,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
              keySerializer, valueSerializer);
     }
 
+    //在configs基础上,添加两个key-value键值对,关于key和value序列化成字节数组的两个class信息
     private static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
                                                       Serializer<?> keySerializer, Serializer<?> valueSerializer) {
         Map<String, Object> newConfigs = new HashMap<String, Object>();
@@ -143,6 +150,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
              keySerializer, valueSerializer);
     }
 
+    //在configs基础上,添加两个key-value键值对,关于key和value序列化成字节数组的两个class信息
     private static Properties addSerializerToConfig(Properties properties,
                                                     Serializer<?> keySerializer, Serializer<?> valueSerializer) {
         Properties newProperties = new Properties();
@@ -169,7 +177,10 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                                                                         MetricsReporter.class);
         reporters.add(new JmxReporter(jmxPrefix));
         this.metrics = new Metrics(metricConfig, reporters, time);
+        //默认的Partitione策略
         this.partitioner = new Partitioner();
+        
+        
         long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.metadataFetchTimeoutMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
         this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG));
@@ -178,6 +189,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
         this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
         Map<String, String> metricTags = new LinkedHashMap<String, String>();
         metricTags.put("client-id", clientId);
+        
         this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                                                  this.totalMemorySize,
                                                  config.getLong(ProducerConfig.LINGER_MS_CONFIG),
@@ -186,6 +198,9 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                                                  metrics,
                                                  time,
                                                  metricTags);
+        
+        
+        //将host:part字符串集合转换成InetSocketAddress集合
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
 
@@ -206,6 +221,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                                  this.metrics,
                                  new SystemTime(),
                                  clientId);
+        
         String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
         this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
         this.ioThread.start();
@@ -217,20 +233,25 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                                                               Serializer.class);
             this.keySerializer.configure(config.originals(), true);
         }
-        else
-            this.keySerializer = keySerializer;
+        else{
+        	this.keySerializer = keySerializer;
+        }
+            
         if (valueSerializer == null) {
             this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                                                                 Serializer.class);
             this.valueSerializer.configure(config.originals(), false);
         }
-        else
-            this.valueSerializer = valueSerializer;
+        else{
+        	this.valueSerializer = valueSerializer;
+        }
+            
 
         config.logUnused();
         log.debug("Kafka producer started");
     }
 
+    //参数acksString是all或者整数
     private static int parseAcks(String acksString) {
         try {
             return acksString.trim().toLowerCase().equals("all") ? -1 : Integer.parseInt(acksString.trim());
@@ -311,8 +332,10 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K,V> record, Callback callback) {
         try {
-            // first make sure the metadata for the topic is available
+            // first make sure the metadata for the topic is available 确保该topic有可用的partition集合
             waitOnMetadata(record.topic(), this.metadataFetchTimeoutMs);
+            
+            //对key-value进行序列化
             byte[] serializedKey;
             try {
                 serializedKey = keySerializer.serialize(record.topic(), record.key());
@@ -329,12 +352,19 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer");
             }
+            
+            //为该key-value分配partition
             ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<byte[], byte[]>(record.topic(), record.partition(), serializedKey, serializedValue);
             int partition = partitioner.partition(serializedRecord, metadata.fetch());
+            
+            //key-value序列化后所占用字节大小
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
+            //校验序列化的字节长度是否允许发送
             ensureValidRecordSize(serializedSize);
+            
             TopicPartition tp = new TopicPartition(record.topic(), partition);
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
+            //真正发送数据
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, compressionType, callback);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
@@ -363,14 +393,15 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
      * Wait for cluster metadata including partitions for the given topic to be available.
      * @param topic The topic we want metadata for
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
+     * 校验集群中给定的topic有可用的partition集合存在
      */
     private void waitOnMetadata(String topic, long maxWaitMs) {
-        if (metadata.fetch().partitionsForTopic(topic) != null) {
+        if (metadata.fetch().partitionsForTopic(topic) != null) {//存在,则停止校验
             return;
-        } else {
+        } else {//不存在
             long begin = time.milliseconds();
             long remainingWaitMs = maxWaitMs;
-            while (metadata.fetch().partitionsForTopic(topic) == null) {
+            while (metadata.fetch().partitionsForTopic(topic) == null) {//只要是null则一直不停的循环,直到时间超时,或者不是null为止
                 log.trace("Requesting metadata update for topic {}.", topic);
                 int version = metadata.requestUpdate();
                 metadata.add(topic);
@@ -386,6 +417,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
 
     /**
      * Validate that the record size isn't too large
+     * 校验序列化的字节长度是否允许发送,太长是不允许发送的
      */
     private void ensureValidRecordSize(int size) {
         if (size > this.maxRequestSize)

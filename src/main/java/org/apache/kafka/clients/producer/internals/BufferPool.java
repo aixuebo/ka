@@ -45,12 +45,12 @@ import org.apache.kafka.common.utils.Time;
 public final class BufferPool {
 
     private final long totalMemory;
-    private final int poolableSize;
-    private final boolean blockOnExhaustion;
+    private final int poolableSize;//free队列中每一个ByteBuffer元素对应的字节数组大小capacal
+    private final boolean blockOnExhaustion;//true表示耗尽内存时候要阻塞,false表示耗尽内存时,抛异常,不阻塞
     private final ReentrantLock lock;
-    private final Deque<ByteBuffer> free;
+    private final Deque<ByteBuffer> free;//存放已经解除的ByteBuffer缓冲区集合队列
     private final Deque<Condition> waiters;
-    private long availableMemory;
+    private long availableMemory;//可用内存大小
     private final Metrics metrics;
     private final Time time;
     private final Sensor waitTime;
@@ -106,25 +106,25 @@ public final class BufferPool {
 
         this.lock.lock();
         try {
-            // check if we have a free buffer of the right size pooled
+            // check if we have a free buffer of the right size pooled 如果我们需要的是poolableSize大小的缓冲区,而且free队列中还存在,则直接从free中获取一个即可
             if (size == poolableSize && !this.free.isEmpty())
                 return this.free.pollFirst();
 
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
-            int freeListSize = this.free.size() * this.poolableSize;
-            if (this.availableMemory + freeListSize >= size) {
+            int freeListSize = this.free.size() * this.poolableSize;//free队列中总可用空间
+            if (this.availableMemory + freeListSize >= size) {//如果空间是大于size的,说明空间很充足,只需要释放即可
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request
-                freeUp(size);
+                freeUp(size);//释放空间,达到满足size即可
                 this.availableMemory -= size;
                 lock.unlock();
                 return ByteBuffer.allocate(size);
-            } else if (!blockOnExhaustion) {
+            } else if (!blockOnExhaustion) {//true表示耗尽内存时候要阻塞,false表示耗尽内存时,抛异常,不阻塞,因此当时false的时候,则抛异常
                 throw new BufferExhaustedException("You have exhausted the " + this.totalMemory
                                                    + " bytes of memory you configured for the client and the client is configured to error"
                                                    + " rather than block when memory is exhausted.");
-            } else {
+            } else {//表示内存已经耗尽,不允许size大小的空间了,因此要进行阻塞,该阶段是因为内存不够导致的,很少发生,也应该避免发生
                 // we are out of memory and will have to block
                 int accumulated = 0;
                 ByteBuffer buffer = null;
@@ -183,6 +183,8 @@ public final class BufferPool {
     /**
      * Attempt to ensure we have at least the requested number of bytes of memory for allocation by deallocating pooled
      * buffers (if needed)
+     * 确保有size大小的可用内存
+     * 如果没有size大小的可用内存,则不断从free队列中释放内存
      */
     private void freeUp(int size) {
         while (!this.free.isEmpty() && this.availableMemory < size)
@@ -196,11 +198,12 @@ public final class BufferPool {
      * @param buffer The buffer to return
      * @param size The size of the buffer to mark as deallocated, note that this maybe smaller than buffer.capacity
      *             since the buffer may re-allocate itself during in-place compression
+     * 解除ByteBuffer缓冲区
      */
     public void deallocate(ByteBuffer buffer, int size) {
         lock.lock();
         try {
-            if (size == this.poolableSize && size == buffer.capacity()) {
+            if (size == this.poolableSize && size == buffer.capacity()) {//回收一整个ByteBuffer对象
                 buffer.clear();
                 this.free.add(buffer);
             } else {
@@ -220,6 +223,7 @@ public final class BufferPool {
 
     /**
      * the total free memory both unallocated and in the free list
+     * 所有可用的内存大小之和
      */
     public long availableMemory() {
         lock.lock();
@@ -232,6 +236,7 @@ public final class BufferPool {
 
     /**
      * Get the unallocated memory (not in the free list or in use)
+     * 获取没有分配的可用内存大小
      */
     public long unallocatedMemory() {
         lock.lock();
@@ -244,6 +249,7 @@ public final class BufferPool {
 
     /**
      * The number of threads blocked waiting on memory
+     * 多少线程正在被阻塞
      */
     public int queued() {
         lock.lock();

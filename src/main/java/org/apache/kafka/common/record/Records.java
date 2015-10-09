@@ -25,8 +25,8 @@ import java.nio.channels.GatheringByteChannel;
  */
 public interface Records extends Iterable<LogEntry> {
 
-    int SIZE_LENGTH = 4;
-    int OFFSET_LENGTH = 8;
+    int SIZE_LENGTH = 4;//记录4个字节的int值,表示该Record所占用的字节大小
+    int OFFSET_LENGTH = 8;//记录8个字节的long值,表示该Record的offset偏移量
     int LOG_OVERHEAD = SIZE_LENGTH + OFFSET_LENGTH;
 
     /**

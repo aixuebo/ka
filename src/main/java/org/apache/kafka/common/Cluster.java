@@ -24,8 +24,12 @@ public final class Cluster {
 
     private final List<Node> nodes;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+    
+    //key是topic,value是该topic对应的partition集合
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    //key是topic,value是该topic对应的有效的partition集合
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
+    
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
 
     /**
@@ -34,9 +38,9 @@ public final class Cluster {
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
     public Cluster(Collection<Node> nodes, Collection<PartitionInfo> partitions) {
-        // make a randomized, unmodifiable copy of the nodes
+        // make a randomized, unmodifiable copy of the nodes 将传入的nodes集合打乱顺序
         List<Node> copy = new ArrayList<Node>(nodes);
-        Collections.shuffle(copy);
+        Collections.shuffle(copy);//打乱顺序
         this.nodes = Collections.unmodifiableList(copy);
 
         // index the partitions by topic/partition for quick lookup
@@ -135,6 +139,7 @@ public final class Cluster {
      * Get the list of partitions for this topic
      * @param topic The topic name
      * @return A list of partitions
+     * 通过topic获取该topic对应的partition集合
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
         return this.partitionsByTopic.get(topic);

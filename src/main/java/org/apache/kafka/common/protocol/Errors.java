@@ -47,7 +47,10 @@ public enum Errors {
     RECORD_LIST_TOO_LARGE(18, new RecordBatchTooLargeException("The request included message batch larger than the configured segment size on the server.")),
     NOT_ENOUGH_REPLICAS(19, new NotEnoughReplicasException("Messages are rejected since there are fewer in-sync replicas than required.")),
     NOT_ENOUGH_REPLICAS_AFTER_APPEND(20, new NotEnoughReplicasAfterAppendException("Messages are written to the log, but to fewer in-sync replicas than required."));
+    
+    //key为异常class对象,value为该异常class对象对应的Errors对象
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
+    //key为code,value为该code对应的Errors对象
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
     static {
         for (Errors error : Errors.values()) {
@@ -90,6 +93,7 @@ public enum Errors {
 
     /**
      * Throw the exception if there is one
+     * 通过code寻找Errors对象
      */
     public static Errors forCode(short code) {
         Errors error = codeToError.get(code);
@@ -98,6 +102,7 @@ public enum Errors {
 
     /**
      * Return the error instance associated with this exception (or UKNOWN if there is none)
+     * 通过异常class对象寻找Errors对象
      */
     public static Errors forException(Throwable t) {
         Errors error = classToError.get(t.getClass());

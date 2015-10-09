@@ -34,6 +34,9 @@ public class StringSerializer implements Serializer<String> {
             encoding = (String) encodingValue;
     }
 
+    /**
+     * 将字符串data序列化成utf-8类型的字节数组
+     */
     @Override
     public byte[] serialize(String topic, String data) {
         try {

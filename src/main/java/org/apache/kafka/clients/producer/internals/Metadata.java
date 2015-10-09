@@ -65,6 +65,7 @@ public final class Metadata {
 
     /**
      * Get the current cluster info without blocking
+     * 获取当前集群对象
      */
     public synchronized Cluster fetch() {
         return this.cluster;
@@ -98,6 +99,7 @@ public final class Metadata {
 
     /**
      * Wait for metadata update until the current version is larger than the last version we know of
+     * 等候,直到当前的版本version 大于 参数lastVerison为止,或者时间超时为止
      */
     public synchronized void awaitUpdate(int lastVerison, long maxWaitMs) {
         long begin = System.currentTimeMillis();

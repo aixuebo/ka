@@ -24,6 +24,9 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 
 public class ClientUtils {
 
+	/**
+	 * 解析url集合,每一个url组装成InetSocketAddress对象,返回InetSocketAddress集合
+	 */
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
         for (String url : urls) {
