@@ -20,11 +20,12 @@ import java.util.Map.Entry;
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a particular topic. There is one for every topic returned by a 
  * {@link Consumer#poll(long)} operation. 
+ * 将kafka服务器返回的记录集合,进行分组,按照topic进行分组
  */
 public class ConsumerRecords<K,V> {
 
-    private final String topic;
-    private final Map<Integer, List<ConsumerRecord<K,V>>> recordsPerPartition;
+    private final String topic;//属于该topic的记录
+    private final Map<Integer, List<ConsumerRecord<K,V>>> recordsPerPartition;//属于该topic的记录集合,Key是partition,value是该partition对应的记录集合
     
     public ConsumerRecords(String topic, Map<Integer, List<ConsumerRecord<K,V>>> records) {
         this.topic = topic;
@@ -35,6 +36,8 @@ public class ConsumerRecords<K,V> {
      * @param partitions The input list of partitions for a particular topic. If no partitions are 
      * specified, returns records for all partitions
      * @return The list of {@link ConsumerRecord}s associated with the given partitions.
+     * 返回指定partitions集合的所有记录集合
+     * 如果partitions参数没有被传入,则默认获取全部属于该topic的所有partitions的记录集合
      */
     public List<ConsumerRecord<K,V>> records(int... partitions) {
         List<ConsumerRecord<K,V>> recordsToReturn = new ArrayList<ConsumerRecord<K,V>>();

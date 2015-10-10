@@ -20,5 +20,6 @@ package kafka.message
 /**
  * Indicates the presense of a message that exceeds the maximum acceptable 
  * length (whatever that happens to be)
+ * 信息的长度超过了限制异常
  */
 class MessageLengthException(message: String) extends RuntimeException(message)

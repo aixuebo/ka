@@ -38,8 +38,8 @@ public class MockConsumer implements Consumer<byte[], byte[]> {
 
     private final Set<TopicPartition> subscribedPartitions;
     private final Set<String> subscribedTopics;
-    private final Map<TopicPartition, Long> committedOffsets; 
-    private final Map<TopicPartition, Long> consumedOffsets;
+    private final Map<TopicPartition, Long> committedOffsets;//每一个TopicPartition对应的提交到服务器哪个位置
+    private final Map<TopicPartition, Long> consumedOffsets;//每一个TopicPartition对应的从服务器获取数据,已经消费到哪个位置
     
     public MockConsumer() {
         subscribedPartitions = new HashSet<TopicPartition>();
@@ -95,6 +95,7 @@ public class MockConsumer implements Consumer<byte[], byte[]> {
         // hand out one dummy record, 1 per topic
         Map<String, List<ConsumerRecord>> records = new HashMap<String, List<ConsumerRecord>>();
         Map<String, ConsumerRecords<byte[], byte[]>> recordMetadata = new HashMap<String, ConsumerRecords<byte[], byte[]>>();
+        
         for(TopicPartition partition : subscribedPartitions) {
             // get the last consumed offset
             long messageSequence = consumedOffsets.get(partition);
@@ -115,6 +116,7 @@ public class MockConsumer implements Consumer<byte[], byte[]> {
             recordsForTopic.add(new ConsumerRecord(partition.topic(), partition.partition(), null, byteStream.toByteArray(), messageSequence));
             consumedOffsets.put(partition, messageSequence);
         }
+        
         for(Entry<String, List<ConsumerRecord>> recordsPerTopic : records.entrySet()) {
             Map<Integer, List<ConsumerRecord>> recordsPerPartition = new HashMap<Integer, List<ConsumerRecord>>();
             for(ConsumerRecord record : recordsPerTopic.getValue()) {
@@ -136,7 +138,7 @@ public class MockConsumer implements Consumer<byte[], byte[]> {
             return null;
         for(Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
             committedOffsets.put(partitionOffset.getKey(), partitionOffset.getValue());            
-        }        
+        }
         return new OffsetMetadata(committedOffsets, null);
     }
 
@@ -147,14 +149,20 @@ public class MockConsumer implements Consumer<byte[], byte[]> {
         return commit(consumedOffsets, sync);
     }
 
+    /**
+     * 重新设置每一个TopicPartition对应的消费位置
+     */
     @Override
     public void seek(Map<TopicPartition, Long> offsets) {
         // change the fetch offsets
         for(Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
-            consumedOffsets.put(partitionOffset.getKey(), partitionOffset.getValue());            
+            consumedOffsets.put(partitionOffset.getKey(), partitionOffset.getValue());
         }
     }
 
+    /**
+     * 获取每一个TopicPartition在当前消费者中已经提交到哪个offset了
+     */
     @Override
     public Map<TopicPartition, Long> committed(Collection<TopicPartition> partitions) {
         Map<TopicPartition, Long> offsets = new HashMap<TopicPartition, Long>();
@@ -164,6 +172,9 @@ public class MockConsumer implements Consumer<byte[], byte[]> {
         return offsets;
     }
 
+    /**
+     * 获取每一个TopicPartition在当前消费者中已经消费到哪个offset了
+     */
     @Override
     public Map<TopicPartition, Long> position(Collection<TopicPartition> partitions) {
         Map<TopicPartition, Long> positions = new HashMap<TopicPartition, Long>();

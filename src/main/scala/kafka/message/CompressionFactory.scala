@@ -24,8 +24,10 @@ import java.io.InputStream
 
 import org.apache.kafka.common.message.{KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
 
+//将输入/输出流用压缩方式进行包装
 object CompressionFactory {
   
+  //将压缩方式和输出流作为参数,对输出流进行压缩包装
   def apply(compressionCodec: CompressionCodec, stream: OutputStream): OutputStream = {
     compressionCodec match {
       case DefaultCompressionCodec => new GZIPOutputStream(stream)
@@ -40,6 +42,7 @@ object CompressionFactory {
     }
   }
   
+  //将压缩方式和输入流作为参数,对输入流进行压缩包装
   def apply(compressionCodec: CompressionCodec, stream: InputStream): InputStream = {
     compressionCodec match {
       case DefaultCompressionCodec => new GZIPInputStream(stream)

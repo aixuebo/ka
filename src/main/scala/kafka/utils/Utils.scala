@@ -407,6 +407,7 @@ object Utils extends Logging {
   /**
    * This method gets comma separated values which contains key,value pairs and returns a map of
    * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
+   * 格式key1:val1, key2:val2 转化成Map
    */
   def parseCsvMap(str: String): Map[String, String] = {
     val map = new mutable.HashMap[String, String]
@@ -419,6 +420,7 @@ object Utils extends Logging {
   /**
    * Parse a comma separated string into a sequence of strings.
    * Whitespace surrounding the comma will be removed.
+   * 按照空格拆分成集合,过滤掉空的元素
    */
   def parseCsvList(csvList: String): Seq[String] = {
     if(csvList == null || csvList.isEmpty)

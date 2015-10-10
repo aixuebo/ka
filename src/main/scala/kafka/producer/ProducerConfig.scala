@@ -24,21 +24,26 @@ import kafka.message.{CompressionCodec, NoCompressionCodec}
 import kafka.common.{InvalidConfigException, Config}
 
 object ProducerConfig extends Config {
+  
+  //校验三个属性
   def validate(config: ProducerConfig) {
     validateClientId(config.clientId)
     validateBatchSize(config.batchNumMessages, config.queueBufferingMaxMessages)
     validateProducerType(config.producerType)
   }
 
+  //校验clientId这个值
   def validateClientId(clientId: String) {
     validateChars("client.id", clientId)
   }
 
+  //校验批处理的batchSize 不能大于 队列大小
   def validateBatchSize(batchSize: Int, queueSize: Int) {
     if (batchSize > queueSize)
       throw new InvalidConfigException("Batch size = " + batchSize + " can't be larger than queue size = " + queueSize)
   }
 
+  //类型只能是sync或者async
   def validateProducerType(producerType: String) {
     producerType match {
       case "sync" =>
@@ -65,13 +70,13 @@ class ProducerConfig private (val props: VerifiableProperties)
    */
   val brokerList = props.getString("metadata.broker.list")
 
-  /** the partitioner class for partitioning events amongst sub-topics */
+  /** the partitioner class for partitioning events amongst sub-topics 选择partition的策略实现类*/
   val partitionerClass = props.getString("partitioner.class", "kafka.producer.DefaultPartitioner")
 
   /** this parameter specifies whether the messages are sent asynchronously *
    * or not. Valid values are - async for asynchronous send                 *
    *                            sync for synchronous send                   */
-  val producerType = props.getString("producer.type", "sync")
+  val producerType = props.getString("producer.type", "sync")//同步方式
 
   /**
    * This parameter allows you to specify the compression codec for all data generated *
@@ -89,6 +94,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    *    If the list of compressed topics is empty, then enable the specified compression codec for all topics
    *
    *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
+   *  按逗号拆分,返回集合
    */
   val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
 

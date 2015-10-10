@@ -20,21 +20,25 @@ package kafka.message
 import java.io.InputStream
 import java.nio.ByteBuffer
 
+//在ByteBuffer中读取字节
 class ByteBufferBackedInputStream(buffer:ByteBuffer) extends InputStream {
+  
+  //返回读取的字节是什么
   override def read():Int  = {
-    buffer.hasRemaining match {
+    buffer.hasRemaining match {//buffer.hasRemaining = true表示有字节可以读取
       case true =>
         (buffer.get() & 0xFF)
       case false => -1
     }
   }
 
+  //返回读取了多少个字节
   override def read(bytes:Array[Byte], off:Int, len:Int):Int = {
-    buffer.hasRemaining match {
+    buffer.hasRemaining match {//buffer.hasRemaining = true表示有字节可以读取
       case true =>
         // Read only what's left
-        val realLen = math.min(len, buffer.remaining())
-        buffer.get(bytes, off, realLen)
+        val realLen = math.min(len, buffer.remaining())//计算真正可以读取的字节数量
+        buffer.get(bytes, off, realLen)//真正去读取字节,读取后填充到bytes里面
         realLen
       case false => -1
     }

@@ -31,6 +31,8 @@ class Producer[K,V](val config: ProducerConfig,
   extends Logging {
 
   private val hasShutdown = new AtomicBoolean(false)
+  
+  //生产者缓存信息的队列
   private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueBufferingMaxMessages)
 
   private var sync: Boolean = true

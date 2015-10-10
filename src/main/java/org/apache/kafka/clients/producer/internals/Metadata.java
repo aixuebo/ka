@@ -22,36 +22,38 @@ import org.slf4j.LoggerFactory;
 
 /**
  * A class encapsulating some of the logic around metadata.
+ * 该类封装了一些元数据
  * <p>
  * This class is shared by the client thread (for partitioning) and the background sender thread.
  * 
  * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metdata for a
  * topic we don't have any metadata for it will trigger a metadata update.
+ * Metadata顾名思义保存的是kafka集群的元数据，metadata的更新和topic有关。
  */
 public final class Metadata {
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
-    private final long refreshBackoffMs;
-    private final long metadataExpireMs;
-    private int version;
-    private long lastRefreshMs;
+    private final long refreshBackoffMs;//最小刷新时间,即使metadataExpireMs设置的再小,也不能小于refreshBackoffMs进行刷新
+    private final long metadataExpireMs;//元数据过期周期
+    private int version;//当前版本
+    private long lastRefreshMs;//最后一次刷新时间
     private Cluster cluster;
-    private boolean needUpdate;
-    private final Set<String> topics;
+    private boolean needUpdate;//是否需要更新,true表示要请求更新元数据信息
+    private final Set<String> topics;//管理topic集合
 
     /**
      * Create a metadata instance with reasonable defaults
      */
     public Metadata() {
-        this(100L, 60 * 60 * 1000L);
+        this(100L, 60 * 60 * 1000L);//60 * 60 * 1000L = 一小时
     }
 
     /**
      * Create a new Metadata instance
      * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
      *        polling
-     * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
+     * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh 不用刷新,可以再这个期间内保持元数据信息
      */
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
         this.refreshBackoffMs = refreshBackoffMs;
@@ -82,6 +84,7 @@ public final class Metadata {
      * The next time to update the cluster info is the maximum of the time the current info will expire
      * and the time the current info can be updated (i.e. backoff time has elapsed); If an update has
      * been request then the expiry time is now
+     * 根据当前时间,返回还需要多久才能更新元数据
      */
     public synchronized long timeToNextUpdate(long nowMs) {
         long timeToExpire = needUpdate ? 0 : Math.max(this.lastRefreshMs + this.metadataExpireMs - nowMs, 0);
@@ -91,6 +94,7 @@ public final class Metadata {
 
     /**
      * Request an update of the current cluster metadata info, return the current version before the update
+     * 请求一个更新集群元数据请求,并且返回请求前的版本号
      */
     public synchronized int requestUpdate() {
         this.needUpdate = true;

@@ -41,17 +41,19 @@ object ClientUtils extends Logging{
    * @param brokers The brokers in the cluster as configured on the producer through metadata.broker.list
    * @param producerConfig The producer's config
    * @return topic metadata response
+   * 抓取topic元数据
    */
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
-    var fetchMetaDataSucceeded: Boolean = false
+    var fetchMetaDataSucceeded: Boolean = false//抓取结果是否成功
     var i: Int = 0
-    val topicMetadataRequest = new TopicMetadataRequest(TopicMetadataRequest.CurrentVersion, correlationId, producerConfig.clientId, topics.toSeq)
-    var topicMetadataResponse: TopicMetadataResponse = null
+    val topicMetadataRequest = new TopicMetadataRequest(TopicMetadataRequest.CurrentVersion, correlationId, producerConfig.clientId, topics.toSeq)//抓取请求
+    var topicMetadataResponse: TopicMetadataResponse = null//抓取请求返回值
     var t: Throwable = null
     // shuffle the list of brokers before sending metadata requests so that most requests don't get routed to the
-    // same broker
+    // same broker 打乱brokers集合的顺序,目的是所有请求不会都路由到相同的broker节点上
     val shuffledBrokers = Random.shuffle(brokers)
-    while(i < shuffledBrokers.size && !fetchMetaDataSucceeded) {
+    
+    while(i < shuffledBrokers.size && !fetchMetaDataSucceeded) {//如果节点还存在,并且没有抓取成功,则就进行while循环抓取
       val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, shuffledBrokers(i))
       info("Fetching metadata from broker %s with correlation id %d for %d topic(s) %s".format(shuffledBrokers(i), correlationId, topics.size, topics))
       try {
@@ -68,9 +70,10 @@ object ClientUtils extends Logging{
         producer.close()
       }
     }
-    if(!fetchMetaDataSucceeded) {
+    
+    if(!fetchMetaDataSucceeded) {//如果抓取失败,抛异常
       throw new KafkaException("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, shuffledBrokers), t)
-    } else {
+    } else {//说明成功抓取多少个topic，以及哪些topic被抓取了元数据
       debug("Successfully fetched metadata for %d topic(s) %s".format(topics.size, topics))
     }
     return topicMetadataResponse
@@ -86,7 +89,7 @@ object ClientUtils extends Logging{
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String, timeoutMs: Int,
                          correlationId: Int = 0): TopicMetadataResponse = {
     val props = new Properties()
-    props.put("metadata.broker.list", brokers.map(_.connectionString).mkString(","))
+    props.put("metadata.broker.list", brokers.map(_.connectionString).mkString(","))//改成host:port,host:port
     props.put("client.id", clientId)
     props.put("request.timeout.ms", timeoutMs.toString)
     val producerConfig = new ProducerConfig(props)
@@ -95,10 +98,17 @@ object ClientUtils extends Logging{
 
   /**
    * Parse a list of broker urls in the form host1:port1, host2:port2, ... 
+   * 解析host1:port1, host2:port2为Broker集合
    */
   def parseBrokerList(brokerListStr: String): Seq[Broker] = {
-    val brokersStr = Utils.parseCsvList(brokerListStr)
+    val brokersStr = Utils.parseCsvList(brokerListStr)//按照空格拆分成集合,过滤掉空的元素
 
+    /**
+demo:
+val a = List(100,200,300)
+a indices // (0,1,2)
+a zipWithIndex // ((100,0), (200,1), (300,2))
+     */
     brokersStr.zipWithIndex.map { case (address, brokerId) =>
       new Broker(brokerId, getHost(address), getPort(address))
     }

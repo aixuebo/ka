@@ -17,13 +17,14 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * A key/value pair to be received from Kafka. This consists of a topic name and a partition number, from which the 
  * record is being received and an offset that points to the record in a Kafka partition. 
+ * 每一条消费记录从kafka服务器中被返回
  */
 public final class ConsumerRecord<K,V> {
-    private final TopicPartition partition; 
-    private final K key;
-    private final V value;
-    private final long offset;
-    private volatile Exception error;
+    private final TopicPartition partition;//该记录对应的topic和partition 
+    private final K key;//该记录的key
+    private final V value;//该记录的value
+    private final long offset;//该记录在该topic和partition中的偏移量
+    private volatile Exception error;//获取过程中产生的异常
     
     /**
      * Creates a record to be received from a specified topic and partition

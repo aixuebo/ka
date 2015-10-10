@@ -19,6 +19,7 @@ package kafka.message
 
 /**
  * Indicates that a message failed its checksum and is corrupt
+ * 信息校验和的校验失败异常
  */
 class InvalidMessageException(message: String) extends RuntimeException(message) {
   def this() = this(null)

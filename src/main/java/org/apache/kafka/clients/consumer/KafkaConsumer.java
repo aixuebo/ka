@@ -30,16 +30,25 @@ import java.util.*;
 
 /**
  * A Kafka client that consumes records from a Kafka cluster.
+ * kafka客户端去从kafka集群中消费记录
  * <P>
  * The consumer is <i>thread safe</i> and should generally be shared among all threads for best performance.
+ * 这个消费者是线程安全的,并且也应该被多线程共享一个消费者,目的是性能更好
  * <p>
  * The consumer is single threaded and multiplexes I/O over TCP connections to each of the brokers it
  * needs to communicate with. Failure to close the consumer after use will leak these resources.
+ * 该消费者是单线程的,并且使用多样性的IO去执行TCP连接到每一个broker节点,即单线程消费者,但是消费者中每一个与broker节点连接都是一个单独的tcp链接,因此当该消费者失败要去关闭的时候,需要考虑资源问题
  * <h3>Usage Examples</h3>
  * The consumer APIs offer flexibility to cover a variety of consumption use cases. Following are some examples to demonstrate the correct use of 
  * the available APIs. Each of the examples assumes the presence of a user implemented process() method that processes a given batch of messages
- * and returns the offset of the latest processed message per partition. Note that process() is not part of the consumer API and is only used as
- * a convenience method to demonstrate the different use cases of the consumer APIs. Here is a sample implementation of such a process() method.
+ * and returns the offset of the latest processed message per partition. 
+ * Note that process() is not part of the consumer API and is only used as
+ * a convenience method to demonstrate the different use cases of the consumer APIs. 
+ * 这个消费者API提供了灵活的去应付各种各样的消费使用case,以下的一些例子证明正确的使用有效的API,每一个例子都假设用户已经实现了process方法,该process方法是处理给定的批量message信息,并且为每一个partition返回最后处理的偏移量即可
+ * 注意这个process方法不是消费者API的一部分,仅仅是一个简便的方法去证明使用该消费者API的不同的用户场景
+ * 
+ * Here is a sample implementation of such a process() method.
+ * 这里有一个简单的process方法实现
  * <pre>
  * {@code
  * private Map<TopicPartition, Long> process(Map<String, ConsumerRecord<byte[], byte[]> records) {
@@ -324,6 +333,7 @@ import java.util.*;
  * consumer.close();
  * }
  * </pre>
+ * 功能是将字节数组转换成K-V对象的反序列化过程
  */
 public class KafkaConsumer<K,V> implements Consumer<K,V> {
 
@@ -332,10 +342,12 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
     private final long metadataFetchTimeoutMs;
     private final long totalMemorySize;
     private final Metrics metrics;
-    private final Set<String> subscribedTopics;
-    private final Set<TopicPartition> subscribedPartitions;
-    private final Deserializer<K> keyDeserializer;
-    private final Deserializer<V> valueDeserializer;
+    
+    //注意,订阅topics或者topic-partition组合对象TopicPartition是互相冲突的,只能订阅一种
+    private final Set<String> subscribedTopics;//订阅的topic集合
+    private final Set<TopicPartition> subscribedPartitions;//订阅的topic和partition集合
+    private final Deserializer<K> keyDeserializer;//将key的字节数组转换成对象的反序列化类
+    private final Deserializer<V> valueDeserializer;//将value的字节数组转换成对象的反序列化类
 
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -375,6 +387,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      *                         be called when the deserializer is passed in directly.
      * @param valueDeserializer  The deserializer for value that implements {@link Deserializer}. The configure() method
      *                           won't be called when the deserializer is passed in directly.
+     * 后两个参数是将字节数组转换成对象的反序列化类
      */
     public KafkaConsumer(Map<String, Object> configs, ConsumerRebalanceCallback callback, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         this(new ConsumerConfig(addDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
@@ -451,18 +464,20 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
                                    new SystemTime());
         this.metadataFetchTimeoutMs = config.getLong(ConsumerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
         this.totalMemorySize = config.getLong(ConsumerConfig.TOTAL_BUFFER_MEMORY_CONFIG);
+        
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
 
         if (keyDeserializer == null)
-            this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                                                                Deserializer.class);
-        else
-            this.keyDeserializer = keyDeserializer;
+            this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,Deserializer.class);
+        else {
+        	this.keyDeserializer = keyDeserializer;
+        }
+            
         if (valueDeserializer == null)
-            this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                                                                  Deserializer.class);
-        else
-            this.valueDeserializer = valueDeserializer;
+            this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,Deserializer.class);
+        else {
+        	this.valueDeserializer = valueDeserializer;
+        }
 
         config.logUnused();
         log.debug("Kafka consumer started");
@@ -484,7 +499,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
     @Override
     public void subscribe(String... topics) {
         if(subscribedPartitions.size() > 0)
-            throw new IllegalStateException("Subcription to topics and partitions is mutually exclusive");
+            throw new IllegalStateException("Subcription to topics and partitions is mutually exclusive");//订阅topics或者topic-partition组合对象TopicPartition是互相冲突的,只能订阅一种
         for(String topic:topics)
             subscribedTopics.add(topic);
         // TODO: trigger a rebalance operation
@@ -499,7 +514,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
     @Override
     public void subscribe(TopicPartition... partitions) {
         if(subscribedTopics.size() > 0)
-            throw new IllegalStateException("Subcription to topics and partitions is mutually exclusive");
+            throw new IllegalStateException("Subcription to topics and partitions is mutually exclusive");//订阅topics或者topic-partition组合对象TopicPartition是互相冲突的,只能订阅一种
         for(TopicPartition partition:partitions)
             subscribedPartitions.add(partition);
     }
@@ -508,6 +523,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      * Unsubscribe from the specific topics. This will trigger a rebalance operation and messages for this topic will not be returned 
      * from the next {@link #poll(long) poll()} onwards
      * @param topics Topics to unsubscribe from
+     * 移除订阅的topic
      */
     public void unsubscribe(String... topics) {   
         // throw an exception if the topic was never subscribed to
@@ -524,6 +540,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      * Unsubscribe from the specific topic partitions. Messages for these partitions will not be returned from the next 
      * {@link #poll(long) poll()} onwards
      * @param partitions Partitions to unsubscribe from
+     * 移除订阅的TopicPartition
      */
     public void unsubscribe(TopicPartition... partitions) {        
         // throw an exception if the partition was never subscribed to

@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 
 /**
  * The metadata for an offset commit that has been acknowledged by the server
+ * 返回每一个TopicPartition对应的偏移量以及每一个TopicPartition对应的异常
  */
 public final class OffsetMetadata {
 
@@ -40,6 +41,7 @@ public final class OffsetMetadata {
 
     /**
      * The offset of the record in the topic/partition.
+     * 获取指定的TopicPartition对应的偏移量,如果该TopicPartition有异常,则抛异常
      */
     public long offset(TopicPartition partition) {
         if(this.errors != null)
@@ -49,6 +51,7 @@ public final class OffsetMetadata {
 
     /**
      * @return The exception corresponding to the error code returned by the server
+     * 获取指定的TopicPartition对应的异常对象,如果没有异常,则返回null
      */
     public Exception error(TopicPartition partition) {
         if(errors != null)

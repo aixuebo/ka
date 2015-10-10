@@ -666,6 +666,19 @@ object ZkUtils extends Logging {
       for ((topic, consumerThreadIdSet) <- topicCount.getConsumerThreadIdsPerTopic) {
         for (consumerThreadId <- consumerThreadIdSet)
           consumersPerTopicMap.get(topic) match {
+          /**
+合并List
+一个叫做“:::”的方法，可以把两个List连接在一起。
+
+val oneTwo = List(1, 2)
+val threeFour = List(3, 4)
+val oneTwoThreeFour = oneTwo ::: threeFour // List(1, 2, 3, 4)
+
+还有一个双冒号“::”的方法用来连接一个元素和List，这个元素会在List的最前端：
+
+val twoThree = List(2, 3)
+val oneTwoThree = 1 :: twoThree // List(1, 2, 3)
+           */
             case Some(curConsumers) => consumersPerTopicMap.put(topic, consumerThreadId :: curConsumers)
             case _ => consumersPerTopicMap.put(topic, List(consumerThreadId))
           }

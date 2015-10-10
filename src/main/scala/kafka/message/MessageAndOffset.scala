@@ -17,11 +17,12 @@
 
 package kafka.message
 
-
+//定义信息以及该信息在log中的偏移量
 case class MessageAndOffset(message: Message, offset: Long) {
   
   /**
    * Compute the offset of the next message in the log
+   * 返回下一个message在log中的偏移量
    */
   def nextOffset: Long = offset + 1
 }

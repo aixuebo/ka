@@ -229,8 +229,7 @@ public final class RecordAccumulator {
                         boolean sendable = full || expired || exhausted || closed;
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);
-                        }
-                        else {
+                        } else {
                             // Note that this results in a conservative estimate since an un-sendable partition may have
                             // a leader that will later be found to have sendable data. However, this is good enough
                             // since we'll just wake up and then sleep again for the remaining time.

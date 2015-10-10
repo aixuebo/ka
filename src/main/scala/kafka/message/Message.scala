@@ -23,6 +23,7 @@ import kafka.utils._
 
 /**
  * Constants related to messages
+ * 指代一个message信息
  */
 object Message {
   
@@ -68,7 +69,7 @@ object Message {
 
 /**
  * A message. The format of an N byte message is the following:
- *
+ * 格式:
  * 1. 4 byte CRC32 of the message
  * 2. 1 byte "magic" identifier to allow format changes, value is 2 currently
  * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
@@ -85,11 +86,12 @@ class Message(val buffer: ByteBuffer) {
   
   /**
    * A constructor to create a Message
-   * @param bytes The payload of the message
+   * @param bytes The payload of the message 装着message信息的字节数组
    * @param compressionCodec The compression codec used on the contents of the message (if any)
-   * @param key The key of the message (null, if none)
-   * @param payloadOffset The offset into the payload array used to extract payload
-   * @param payloadSize The size of the payload to use
+   * @param key The key of the message (null, if none) key对应的字节数组
+   * @param payloadOffset The offset into the payload array used to extract payload 表示value需要从bytes字节数组的哪个位置开始获取 
+   * @param payloadSize The size of the payload to use 表示value需要从bytes参数中获取的长度
+   * 将该message信息写入到buffer中,而buffer的大小是算出来后创建的
    */
   def this(bytes: Array[Byte], 
            key: Array[Byte],            
@@ -124,9 +126,9 @@ class Message(val buffer: ByteBuffer) {
     buffer.putInt(size)
     if(bytes != null)
       buffer.put(bytes, payloadOffset, size)
-    buffer.rewind()
+    buffer.rewind()//将buffer的position设置到0的位置,下面要在该位置写入校验和数据
     
-    // now compute the checksum and fill it in
+    // now compute the checksum and fill it in 在校验和的位置写入校验和
     Utils.writeUnsignedInt(buffer, CrcOffset, computeChecksum)
   }
   
@@ -144,22 +146,26 @@ class Message(val buffer: ByteBuffer) {
     
   /**
    * Compute the checksum of the message from the message contents
+   * 计算buffer的校验和
    */
   def computeChecksum(): Long = 
     Utils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
   
   /**
    * Retrieve the previously computed CRC for this message
+   * 读取buffer的校验和
    */
   def checksum: Long = Utils.readUnsignedInt(buffer, CrcOffset)
   
     /**
    * Returns true if the crc stored with the message matches the crc computed off the message contents
+   * 校验读取的校验和 与 计算的校验和是否相同
    */
   def isValid: Boolean = checksum == computeChecksum
   
   /**
    * Throw an InvalidMessageException if isValid is false for this message
+   * 确保校验和有效
    */
   def ensureValid() {
     if(!isValid)
@@ -168,71 +174,83 @@ class Message(val buffer: ByteBuffer) {
   
   /**
    * The complete serialized size of this message in bytes (including crc, header attributes, etc)
+   * 该buffer有用信息的字节长度
    */
   def size: Int = buffer.limit
   
   /**
    * The length of the key in bytes
+   * key的字节长度
    */
   def keySize: Int = buffer.getInt(Message.KeySizeOffset)
   
   /**
    * Does the message have a key?
+   * 是否存在的key
    */
   def hasKey: Boolean = keySize >= 0
   
   /**
    * The position where the payload size is stored
+   * value的字节长度在buffer中的位置
    */
   private def payloadSizeOffset = Message.KeyOffset + max(0, keySize)
   
   /**
    * The length of the message value in bytes
+   * 获取value的字节长度
    */
   def payloadSize: Int = buffer.getInt(payloadSizeOffset)
   
   /**
    * Is the payload of this message null
+   * 是否有value值,true表示没有value
    */
   def isNull(): Boolean = payloadSize < 0
   
   /**
    * The magic version of this message
+   * 获取magic字节
    */
   def magic: Byte = buffer.get(MagicOffset)
   
   /**
    * The attributes stored with this message
+   * 获取attributes字节
    */
   def attributes: Byte = buffer.get(AttributesOffset)
   
   /**
    * The compression codec used with this message
+   * 获取该message的压缩类型
    */
   def compressionCodec: CompressionCodec = 
     CompressionCodec.getCompressionCodec(buffer.get(AttributesOffset) & CompressionCodeMask)
   
   /**
    * A ByteBuffer containing the content of the message
+   * 获取value对应的ByteBuffer
    */
   def payload: ByteBuffer = sliceDelimited(payloadSizeOffset)
   
   /**
    * A ByteBuffer containing the message key
+   * 获取key对应的ByteBuffer
    */
   def key: ByteBuffer = sliceDelimited(KeySizeOffset)
   
   /**
    * Read a size-delimited byte buffer starting at the given offset
+   * 对buffer进行复制,产生一个新的buffer,而该新的buffer与老buffer共用同一块内存
    */
   private def sliceDelimited(start: Int): ByteBuffer = {
     val size = buffer.getInt(start)
     if(size < 0) {
       null
     } else {
-      var b = buffer.duplicate
-      b.position(start + 4)
-      b = b.slice()
+      var b = buffer.duplicate//复制该buffer
+      b.position(start + 4)//设置新buffer的position位置
+      b = b.slice()//对该新的buffer进行分片
       b.limit(size)
       b.rewind
       b

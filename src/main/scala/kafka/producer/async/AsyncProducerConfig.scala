@@ -18,13 +18,14 @@ package kafka.producer.async
 
 import kafka.utils.VerifiableProperties
 
+//异步配置
 trait AsyncProducerConfig {
   val props: VerifiableProperties
 
   /* maximum time, in milliseconds, for buffering data on the producer queue */
   val queueBufferingMaxMs = props.getInt("queue.buffering.max.ms", 5000)
 
-  /** the maximum size of the blocking queue for buffering on the producer */
+  /** the maximum size of the blocking queue for buffering on the producer最多在一个生产者上允许缓存的message记录条数 */
   val queueBufferingMaxMessages = props.getInt("queue.buffering.max.messages", 10000)
 
   /**
@@ -35,13 +36,13 @@ trait AsyncProducerConfig {
    */
   val queueEnqueueTimeoutMs = props.getInt("queue.enqueue.timeout.ms", -1)
 
-  /** the number of messages batched at the producer */
+  /** the number of messages batched at the producer 一次批处理消息传输多少条message记录 */
   val batchNumMessages = props.getInt("batch.num.messages", 200)
 
-  /** the serializer class for values */
+  /** the serializer class for values 生产者将对象序列化成字节*/
   val serializerClass = props.getString("serializer.class", "kafka.serializer.DefaultEncoder")
   
-  /** the serializer class for keys (defaults to the same as for values) */
+  /** the serializer class for keys (defaults to the same as for values) 生产者将key序列化成字节*/
   val keySerializerClass = props.getString("key.serializer.class", serializerClass)
   
 }

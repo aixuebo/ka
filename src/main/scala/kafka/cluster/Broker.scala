@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils._
  */
 object Broker {
 
+  //brokerInfoString是一个json字符串,从该字符串中创建Broker对象
   def createBroker(id: Int, brokerInfoString: String): Broker = {
     if(brokerInfoString == null)
       throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
@@ -47,6 +48,7 @@ object Broker {
     }
   }
 
+  //从buffer中还原Broker对象
   def readFrom(buffer: ByteBuffer): Broker = {
     val id = buffer.getInt
     val host = readShortString(buffer)
@@ -59,11 +61,11 @@ case class Broker(id: Int, host: String, port: Int) {
   
   override def toString: String = "id:" + id + ",host:" + host + ",port:" + port
 
-  def connectionString: String = formatAddress(host, port)
+  def connectionString: String = formatAddress(host, port)//相当于toString方法
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(id)
-    writeShortString(buffer, host)
+    writeShortString(buffer, host)//记录host到buffer中
     buffer.putInt(port)
   }
 

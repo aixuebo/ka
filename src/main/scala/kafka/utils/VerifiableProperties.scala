@@ -22,16 +22,22 @@ import java.util.Collections
 import scala.collection._
 import kafka.message.{CompressionCodec, NoCompressionCodec}
 
-
+/**
+ * 通过key获取Properties中的value,并且有校验该value是否在一定区间以及该value是否合法功能
+ */
 class VerifiableProperties(val props: Properties) extends Logging {
+  
+  //使用过的key存放在该set集合内
   private val referenceSet = mutable.HashSet[String]()
   
   def this() = this(new Properties)
 
+  //是否包含该key
   def containsKey(name: String): Boolean = {
     props.containsKey(name)
   }
 
+  //获取该key对应的value
   def getProperty(name: String): String = {
     val value = props.getProperty(name)
     referenceSet.add(name)
@@ -68,6 +74,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @param range The range in which the value must fall (inclusive)
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the integer value
+   * 将value转换成int类型的,并且校验该值是否在range区间,该区间是闭区间[]形式
    */
   def getIntInRange(name: String, default: Int, range: (Int, Int)): Int = {
     val v =
@@ -79,6 +86,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     v
   }
 
+  //将value转换成short类型的,并且校验该值是否在range区间,该区间是闭区间[]形式
  def getShortInRange(name: String, default: Short, range: (Short, Short)): Short = {
     val v =
       if(containsKey(name))
@@ -111,6 +119,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * @param range The range in which the value must fall (inclusive)
    * @throws IllegalArgumentException If the value is not in the given range
    * @return the long value
+   * 将value转换成long类型的,并且校验该值是否在range区间,该区间是闭区间[]形式
    */
   def getLongInRange(name: String, default: Long, range: (Long, Long)): Long = {
     val v =
@@ -180,6 +189,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
   
   /**
    * Get a Map[String, String] from a property list in the form k1:v2, k2:v2, ...
+   * 格式key1:val1, key2:val2 转化成Map
    */
   def getMap(name: String, valid: String => Boolean = s => true): Map[String, String] = {
     try {
@@ -215,10 +225,12 @@ class VerifiableProperties(val props: Properties) extends Logging {
 
   def verify() {
     info("Verifying properties")
+    //对key进行排序
     val propNames = {
       import JavaConversions._
       Collections.list(props.propertyNames).map(_.toString).sorted
     }
+    
     for(key <- propNames) {
       if (!referenceSet.contains(key) && !key.startsWith("external"))
         warn("Property %s is not valid".format(key))

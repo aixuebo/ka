@@ -17,7 +17,10 @@
 
 package kafka.message
 
+//压缩方式的定义
 object CompressionCodec {
+  
+  //通过id返回压缩方式
   def getCompressionCodec(codec: Int): CompressionCodec = {
     codec match {
       case NoCompressionCodec.codec => NoCompressionCodec
@@ -27,6 +30,8 @@ object CompressionCodec {
       case _ => throw new kafka.common.UnknownCodecException("%d is an unknown compression codec".format(codec))
     }
   }
+
+  //通过name返回压缩方式
   def getCompressionCodec(name: String): CompressionCodec = {
     name.toLowerCase match {
       case NoCompressionCodec.name => NoCompressionCodec
@@ -38,6 +43,7 @@ object CompressionCodec {
   }
 }
 
+//为压缩方式,声明id编码和name名称
 sealed trait CompressionCodec { def codec: Int; def name: String }
 
 case object DefaultCompressionCodec extends CompressionCodec {
