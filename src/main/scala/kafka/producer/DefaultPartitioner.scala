@@ -20,9 +20,11 @@ package kafka.producer
 
 import kafka.utils._
 
+//默认实现是对key获取hash,然后对总的分区数量取魔
 class DefaultPartitioner(props: VerifiableProperties = null) extends Partitioner {
   private val random = new java.util.Random
   
+  //默认实现是对key获取hash,然后对总的分区数量取魔
   def partition(key: Any, numPartitions: Int): Int = {
     Utils.abs(key.hashCode) % numPartitions
   }

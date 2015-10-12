@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit
 import kafka.utils.Pool
 import kafka.common.{ClientIdAllBrokers, ClientIdBroker, ClientIdAndBroker}
 
+//clientId-brokerHost-brokerPort,表示标示了生产者clientId向哪个broker节点的哪个端口进行发送的信息的统计信息
 class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup {
   val tags = metricId match {
     case ClientIdAndBroker(clientId, brokerHost, brokerPort) => Map("clientId" -> clientId, "brokerHost" -> brokerHost, "brokerPort" -> brokerPort.toString)
@@ -37,11 +38,12 @@ class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup
  */
 class ProducerRequestStats(clientId: String) {
   private val valueFactory = (k: ClientIdBroker) => new ProducerRequestMetrics(k)
-  private val stats = new Pool[ClientIdBroker, ProducerRequestMetrics](Some(valueFactory))
-  private val allBrokersStats = new ProducerRequestMetrics(new ClientIdAllBrokers(clientId))
+  private val stats = new Pool[ClientIdBroker, ProducerRequestMetrics](Some(valueFactory))//clientId-brokerHost-brokerPort,表示标示了生产者clientId向哪个broker节点的哪个端口进行发送的信息
+  private val allBrokersStats = new ProducerRequestMetrics(new ClientIdAllBrokers(clientId))//clientId-AllBrokers,表示仅仅标示生产者clientId,而不管他向哪个broker节点发送信息
 
   def getProducerRequestAllBrokersStats(): ProducerRequestMetrics = allBrokersStats
 
+  //clientId-brokerHost-brokerPort,表示标示了生产者clientId向哪个broker节点的哪个端口进行发送的信息
   def getProducerRequestStats(brokerHost: String, brokerPort: Int): ProducerRequestMetrics = {
     stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerHost, brokerPort))
   }
@@ -49,6 +51,7 @@ class ProducerRequestStats(clientId: String) {
 
 /**
  * Stores the request stats information of each producer client in a (clientId -> ProducerRequestStats) map.
+ * clientId-brokerHost-brokerPort,表示标示了生产者clientId向哪个broker节点的哪个端口进行发送的信息
  */
 object ProducerRequestStatsRegistry {
   private val valueFactory = (k: String) => new ProducerRequestStats(k)

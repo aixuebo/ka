@@ -30,16 +30,17 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
   import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
   import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 
-  // decide whether to send synchronously based on producer properties
+  // decide whether to send synchronously based on producer properties 生产者是同步还是异步
   val sync = producerProps.getProperty("producer.type", "async").equals("sync")
 
+  //创建一个生产者,key-value都是字节数组的生产者
   val producer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
 
   override def send(topic: String, key: Array[Byte], value: Array[Byte]) {
     val record = new ProducerRecord[Array[Byte],Array[Byte]](topic, key, value)
-    if(sync) {
+    if(sync) {//同步方式发送
       this.producer.send(record).get()
-    } else {
+    } else {//异步方式发送
       this.producer.send(record,
         new ErrorLoggingCallback(topic, key, value, false))
     }
@@ -53,9 +54,11 @@ class NewShinyProducer(producerProps: Properties) extends BaseProducer {
 class OldProducer(producerProps: Properties) extends BaseProducer {
   import kafka.producer.{KeyedMessage, ProducerConfig}
 
-  // default to byte array partitioner
+  // default to byte array partitioner 默认是使用ByteArrayPartitioner进行分区
   if (producerProps.getProperty("partitioner.class") == null)
     producerProps.setProperty("partitioner.class", classOf[kafka.producer.ByteArrayPartitioner].getName)
+    
+    //创建一个生产者,key-value都是字节数组的生产者
   val producer = new kafka.producer.Producer[Array[Byte], Array[Byte]](new ProducerConfig(producerProps))
 
   override def send(topic: String, key: Array[Byte], value: Array[Byte]) {

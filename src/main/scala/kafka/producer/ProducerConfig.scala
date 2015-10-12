@@ -70,7 +70,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    */
   val brokerList = props.getString("metadata.broker.list")
 
-  /** the partitioner class for partitioning events amongst sub-topics 选择partition的策略实现类*/
+  /** the partitioner class for partitioning events amongst sub-topics 选择partition的策略实现类,根据key的hash去魔获取分区*/
   val partitionerClass = props.getString("partitioner.class", "kafka.producer.DefaultPartitioner")
 
   /** this parameter specifies whether the messages are sent asynchronously *

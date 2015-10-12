@@ -61,7 +61,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     var outstandingProduceRequests = serializedData
     var remainingRetries = config.messageSendMaxRetries + 1
     val correlationIdStart = correlationId.get()
-    debug("Handling %d events".format(events.size))
+    debug("Handling %d events".format(events.size))//记录本次要处理多少个事件
     while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
       topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
       if (topicMetadataRefreshInterval >= 0 &&

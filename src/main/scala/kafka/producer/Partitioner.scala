@@ -22,6 +22,7 @@ package kafka.producer
  * 
  * Implementations will be constructed via reflection and are required to have a constructor that takes a single 
  * VerifiableProperties instance--this allows passing configuration properties into the partitioner implementation.
+ * 相当于Hadoop的partition操作,传入key和分区总数,返回该key要分配到哪个分区中
  */
 trait Partitioner {
   /**

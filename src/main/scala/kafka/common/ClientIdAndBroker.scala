@@ -21,14 +21,15 @@ package kafka.common
  * Convenience case class since (clientId, brokerInfo) pairs are used to create
  * SyncProducer Request Stats and SimpleConsumer Request and Response Stats.
  */
-
 trait ClientIdBroker {
 }
 
+//clientId-brokerHost-brokerPort,表示标示了生产者clientId向哪个broker节点的哪个端口进行发送的信息
 case class ClientIdAndBroker(clientId: String, brokerHost: String, brokerPort: Int) extends ClientIdBroker {
   override def toString = "%s-%s-%d".format(clientId, brokerHost, brokerPort)
 }
 
+//clientId-AllBrokers,表示仅仅标示生产者clientId,而不管他向哪个broker节点发送信息
 case class ClientIdAllBrokers(clientId: String) extends ClientIdBroker {
   override def toString = "%s-%s".format(clientId, "AllBrokers")
 }

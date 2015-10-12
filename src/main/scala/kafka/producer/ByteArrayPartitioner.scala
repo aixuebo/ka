@@ -20,6 +20,7 @@ package kafka.producer
 
 import kafka.utils._
 
+//对key是字节数组的情况下,按照字节数组每一个位置进行hash求和后,对总分区数取魔
 class ByteArrayPartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(key: Any, numPartitions: Int): Int = {
     Utils.abs(java.util.Arrays.hashCode(key.asInstanceOf[Array[Byte]])) % numPartitions
