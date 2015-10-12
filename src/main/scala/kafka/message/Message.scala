@@ -24,6 +24,7 @@ import kafka.utils._
 /**
  * Constants related to messages
  * 指代一个message信息
+ * 
  */
 object Message {
   
