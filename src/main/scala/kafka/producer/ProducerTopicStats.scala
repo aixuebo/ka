@@ -22,13 +22,17 @@ import kafka.utils.{Pool, threadsafe}
 import java.util.concurrent.TimeUnit
 
 
+/**
+ * 每一个生产者clientId--topic对应一组统计信息
+ */
 @threadsafe
 class ProducerTopicMetrics(metricId: ClientIdTopic) extends KafkaMetricsGroup {
   val tags = metricId match {
-    case ClientIdAndTopic(clientId, topic) => Map("clientId" -> clientId, "topic" -> topic)
-    case ClientIdAllTopics(clientId) => Map("clientId" -> clientId)
+    case ClientIdAndTopic(clientId, topic) => Map("clientId" -> clientId, "topic" -> topic)//根据clientId、topic获取统计对象
+    case ClientIdAllTopics(clientId) => Map("clientId" -> clientId)//根据clientId获取所有的topic获取统计对象
   }
 
+  //统计信息
   val messageRate = newMeter("MessagesPerSec", "messages", TimeUnit.SECONDS, tags)
   val byteRate = newMeter("BytesPerSec", "bytes", TimeUnit.SECONDS, tags)
   val droppedMessageRate = newMeter("DroppedMessagesPerSec", "drops", TimeUnit.SECONDS, tags)
@@ -37,14 +41,19 @@ class ProducerTopicMetrics(metricId: ClientIdTopic) extends KafkaMetricsGroup {
 /**
  * Tracks metrics for each topic the given producer client has produced data to.
  * @param clientId The clientId of the given producer client.
+ * 每一个clientId生产者对应一个该对象
+ * 该对象又按照topic分组了
  */
 class ProducerTopicStats(clientId: String) {
   private val valueFactory = (k: ClientIdTopic) => new ProducerTopicMetrics(k)
   private val stats = new Pool[ClientIdTopic, ProducerTopicMetrics](Some(valueFactory))
+  //获取该clientId下面所有的topic统计集合
   private val allTopicsStats = new ProducerTopicMetrics(new ClientIdAllTopics(clientId)) // to differentiate from a topic named AllTopics
 
+  //获取该clientId下面所有的topic统计
   def getProducerAllTopicsStats(): ProducerTopicMetrics = allTopicsStats
 
+  //获取该clientId--topic获取统计信息对象
   def getProducerTopicStats(topic: String): ProducerTopicMetrics = {
     stats.getAndMaybePut(new ClientIdAndTopic(clientId, topic))
   }
@@ -52,6 +61,7 @@ class ProducerTopicStats(clientId: String) {
 
 /**
  * Stores the topic stats information of each producer client in a (clientId -> ProducerTopicStats) map.
+ * 全局的,为每个clientId生产者绑定一个ProducerTopicStats对象,而ProducerTopicStats对象又按照topic分组了
  */
 object ProducerTopicStatsRegistry {
   private val valueFactory = (k: String) => new ProducerTopicStats(k)

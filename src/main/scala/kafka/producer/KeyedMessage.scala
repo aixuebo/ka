@@ -20,6 +20,8 @@ package kafka.producer
 /**
  * A topic, key, and value.
  * If a partition key is provided it will override the key for the purpose of partitioning but will not be stored.
+ * 
+ * 包含一组消息,包含key-value、topic以及partKey
  */
 case class KeyedMessage[K, V](val topic: String, val key: K, val partKey: Any, val message: V) {
   if(topic == null)
@@ -29,6 +31,11 @@ case class KeyedMessage[K, V](val topic: String, val key: K, val partKey: Any, v
   
   def this(topic: String, key: K, message: V) = this(topic, key, key, message)
   
+  /**
+   * 如果partKey存在,则返回该partKey进行partition分组
+   * 如果partKey不存在,但是key存在,则使用key进行partition分组
+   * 否则返回null
+   */
   def partitionKey = {
     if(partKey != null)
       partKey
@@ -38,5 +45,6 @@ case class KeyedMessage[K, V](val topic: String, val key: K, val partKey: Any, v
       null  
   }
   
+  //key是否存在
   def hasKey = key != null
 }

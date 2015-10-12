@@ -20,6 +20,7 @@ import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit
 import kafka.utils.Pool
 
+//每一个生产者clientId对应一个该对象,该对象作为该生产者的一些统计信息
 class ProducerStats(clientId: String) extends KafkaMetricsGroup {
   val tags: Map[String, String] = Map("clientId" -> clientId)
   val serializationErrorRate = newMeter("SerializationErrorsPerSec", "errors", TimeUnit.SECONDS, tags)
@@ -29,6 +30,7 @@ class ProducerStats(clientId: String) extends KafkaMetricsGroup {
 
 /**
  * Stores metrics of serialization and message sending activity of each producer client in a (clientId -> ProducerStats) map.
+ * 全局性的,为每一个生产者clientId 对应一个ProducerStats对象,用于统计该生产者的一些信息
  */
 object ProducerStatsRegistry {
   private val valueFactory = (k: String) => new ProducerStats(k)

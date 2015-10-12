@@ -45,17 +45,19 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   private val topicMetadataToRefresh = Set.empty[String]
   private val sendPartitionPerTopicCache = HashMap.empty[String, Int]
 
-  private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)
-  private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
+  private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)//每一个生产者clientId对应一个该对象,该对象作为该生产者的一些统计信息
+  private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)//每一个生产者clientId--topic对应一组统计信息
 
   def handle(events: Seq[KeyedMessage[K,V]]) {
+    //对每一个事件的key-value进行字节码转换,转换成字节数组组装的Message对象
     val serializedData = serialize(events)
     serializedData.foreach {
       keyed =>
-        val dataSize = keyed.message.payloadSize
+        val dataSize = keyed.message.payloadSize//获取value的字节长度
         producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
         producerTopicStats.getProducerAllTopicsStats.byteRate.mark(dataSize)
     }
+    
     var outstandingProduceRequests = serializedData
     var remainingRetries = config.messageSendMaxRetries + 1
     val correlationIdStart = correlationId.get()
@@ -120,6 +122,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     }
   }
 
+  //对每一个事件的key-value进行字节码转换,转换成字节数组组装的Message对象
   def serialize(events: Seq[KeyedMessage[K,V]]): Seq[KeyedMessage[K,Message]] = {
     val serializedMessages = new ArrayBuffer[KeyedMessage[K,Message]](events.size)
     events.foreach{e =>
