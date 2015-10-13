@@ -39,6 +39,7 @@ import scala.Some
 import org.I0Itec.zkclient.ZkClient
 import com.yammer.metrics.core.Gauge
 
+//kafka还可以配置partitions需要备份的个数(replicas),每个partition将会被备份到多台机器上,以提高可用性.
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
 }

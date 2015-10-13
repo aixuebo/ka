@@ -20,6 +20,7 @@ package kafka.api
 import kafka.common.KafkaException
 import java.nio.ByteBuffer
 
+//请求的分类
 object RequestKeys {
   val ProduceKey: Short = 0
   val FetchKey: Short = 1
@@ -35,6 +36,7 @@ object RequestKeys {
   val JoinGroupKey: Short = 11
   val HeartbeatKey: Short = 12
 
+  //Map[Short, (String, (ByteBuffer) => RequestOrResponse)] 表示map的key是short,value是元组,由name和RequestOrResponse组成,其中RequestOrResponse是由一个输入ByteBuffer参数的方法生成的
   val keyToNameAndDeserializerMap: Map[Short, (String, (ByteBuffer) => RequestOrResponse)]=
     Map(ProduceKey -> ("Produce", ProducerRequest.readFrom),
         FetchKey -> ("Fetch", FetchRequest.readFrom),
@@ -51,6 +53,7 @@ object RequestKeys {
         HeartbeatKey -> ("Heartbeat", HeartbeatRequestAndHeader.readFrom)
     )
 
+    //返回编号对应的String类型name
   def nameForKey(key: Short): String = {
     keyToNameAndDeserializerMap.get(key) match {
       case Some(nameAndSerializer) => nameAndSerializer._1
@@ -58,6 +61,7 @@ object RequestKeys {
     }
   }
 
+  //返回编号对应的ByteBuffer类型RequestOrResponse
   def deserializerForKey(key: Short): (ByteBuffer) => RequestOrResponse = {
     keyToNameAndDeserializerMap.get(key) match {
       case Some(nameAndSerializer) => nameAndSerializer._2

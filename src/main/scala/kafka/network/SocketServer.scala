@@ -40,7 +40,7 @@ import com.yammer.metrics.core.{Gauge, Meter}
 class SocketServer(val brokerId: Int,
                    val host: String,
                    val port: Int,
-                   val numProcessorThreads: Int,
+                   val numProcessorThreads: Int,//线程数
                    val maxQueuedRequests: Int,
                    val sendBufferSize: Int,
                    val recvBufferSize: Int,
@@ -63,6 +63,7 @@ class SocketServer(val brokerId: Int,
   def startup() {
     val quotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
     for(i <- 0 until numProcessorThreads) {
+      //表示处理线程池中的一个线程对象
       processors(i) = new Processor(i, 
                                     time, 
                                     maxRequestSize, 
@@ -292,6 +293,7 @@ private[kafka] class Acceptor(val host: String,
 /**
  * Thread that processes all requests from a single connection. There are N of these running in parallel
  * each of which has its own selectors
+ * 处理线程池中的一个线程对象
  */
 private[kafka] class Processor(val id: Int,
                                val time: Time,

@@ -21,9 +21,12 @@ import scala.collection._
 
 /**
  * The set of active brokers in the cluster
+ * 代表集群中活跃的broker集合
+ * 
  */
 private[kafka] class Cluster {
   
+  //id、host、port组成一个节点Broker,这个是broker集合
   private val brokers = new mutable.HashMap[Int, Broker]
   
   def this(brokerList: Iterable[Broker]) {

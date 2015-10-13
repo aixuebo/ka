@@ -91,6 +91,9 @@ object RequestChannel extends Logging {
     }
   }
   
+  /**
+   * @param processor 表示该response属于哪个处理器的Response
+   */
   case class Response(processor: Int, request: Request, responseSend: Send, responseAction: ResponseAction) {
     request.responseCompleteTimeMs = SystemTime.milliseconds
 
@@ -110,6 +113,7 @@ object RequestChannel extends Logging {
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
   private var responseListeners: List[(Int) => Unit] = Nil
   private val requestQueue = new ArrayBlockingQueue[RequestChannel.Request](queueSize)
+  //每一个处理器拥有一个队列,每一个队列存储Response对象
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
   for(i <- 0 until numProcessors)
     responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]()

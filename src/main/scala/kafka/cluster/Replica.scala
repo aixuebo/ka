@@ -24,6 +24,7 @@ import kafka.common.KafkaException
 
 import java.util.concurrent.atomic.AtomicLong
 
+//kafka还可以配置partitions需要备份的个数(replicas),每个partition将会被备份到多台机器上,以提高可用性.
 class Replica(val brokerId: Int,
               val partition: Partition,
               time: Time = SystemTime,

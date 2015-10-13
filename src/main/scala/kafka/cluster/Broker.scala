@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils._
 
 /**
  * A Kafka broker
+ * id、host、port组成一个节点
  */
 object Broker {
 
