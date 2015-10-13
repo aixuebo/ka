@@ -21,6 +21,7 @@ import kafka.cluster.{Replica, Partition}
 
 /**
  * Convenience case class since (topic, partition) pairs are ubiquitous.
+ * 元组,组装成topic和partition
  */
 case class TopicAndPartition(topic: String, partition: Int) {
 

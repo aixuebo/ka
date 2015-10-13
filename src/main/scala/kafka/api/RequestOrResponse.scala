@@ -30,10 +30,15 @@ object Request {
 }
 
 
+/**
+ * @param requestId,表示RequestKeys中的short信息
+ */
 abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Logging {
 
+  //例如:该ProducerRequest占用的字节大小
   def sizeInBytes: Int
   
+  //将内存中的该对象写入到ByteBuffer中
   def writeTo(buffer: ByteBuffer): Unit
 
   def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {}
@@ -41,7 +46,9 @@ abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Lo
   /* The purpose of this API is to return a string description of the Request mainly for the purpose of request logging.
   *  This API has no meaning for a Response object.
    * @param details If this is false, omit the parts of the request description that are proportional to the number of
-   *                topics or partitions. This is mainly to control the amount of request logging. */
+   *                topics or partitions. This is mainly to control the amount of request logging. 
+   * 相当于toString方法               
+   * */
   def describe(details: Boolean):String
 }
 

@@ -37,6 +37,7 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
   
   /**
    * Get the content buffer for this transmission
+   * 首先去报已经完成,然后才获取该完成后的buffer对象
    */
   def buffer: ByteBuffer = {
     expectComplete()
@@ -45,8 +46,10 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
   
   /**
    * Read the bytes in this response from the given channel
+   * 从给定的ReadableByteChannel中读取数据
    */
   def readFrom(channel: ReadableByteChannel): Int = {
+    //首先确保没完成,才可能读数据
     expectIncomplete()
     var read = 0
     // have we read the request size yet?
@@ -74,6 +77,7 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
     read
   }
 
+  //扩容到size大小
   private def byteBufferAllocate(size: Int): ByteBuffer = {
     var buffer: ByteBuffer = null
     try {

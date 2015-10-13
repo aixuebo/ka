@@ -35,6 +35,7 @@ object ProducerRequest {
     val ackTimeoutMs: Int = buffer.getInt
     //build the topic structure
     val topicCount = buffer.getInt
+    //表示该生产者请求,按照topic-partition分组,每组都是一个ByteBufferMessageSet对象
     val partitionDataPairs = (1 to topicCount).flatMap(_ => {
       // process topic
       val topic = readShortString(buffer)
@@ -52,6 +53,9 @@ object ProducerRequest {
   }
 }
 
+/**
+ * @param data collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet],表示该生产者请求,按照topic-partition分组,每组都是一个ByteBufferMessageSet对象
+ */
 case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
                            correlationId: Int,
                            clientId: String,
@@ -62,8 +66,11 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
 
   /**
    * Partitions the data into a map of maps (one for each topic).
+   * 将Map[TopicAndPartition, ByteBufferMessageSet] 按照topic分组,生成Map[topic,Map[TopicAndPartition, ByteBufferMessageSet]]
    */
   private lazy val dataGroupedByTopic = data.groupBy(_._1.topic)
+  
+  //映射成Map[TopicAndPartition,ByteBufferMessageSet.sizeInBytes]
   val topicPartitionMessageSizeMap = data.map(r => r._1 -> r._2.sizeInBytes).toMap
 
   def this(correlationId: Int,
@@ -73,6 +80,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
            data: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]) =
     this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 
+    //与上面的readFrom方法相反,将对象写入到ByteBuffer中
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
@@ -81,14 +89,18 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     buffer.putInt(ackTimeoutMs)
 
     //save the topic structure
-    buffer.putInt(dataGroupedByTopic.size) //the number of topics
+    buffer.putInt(dataGroupedByTopic.size) //the number of topics 缓存有多少个topic
+    
+    //循环每一个topic
     dataGroupedByTopic.foreach {
+      //topicAndPartitionData表示Map[TopicAndPartition, ByteBufferMessageSet]
       case (topic, topicAndPartitionData) =>
-        writeShortString(buffer, topic) //write the topic
-        buffer.putInt(topicAndPartitionData.size) //the number of partitions
+        writeShortString(buffer, topic) //write the topic 写入topic信息
+        buffer.putInt(topicAndPartitionData.size) //the number of partitions 写入该topic有多少个Map[TopicAndPartition, ByteBufferMessageSet]
+        //循环该topic的每一个Map[TopicAndPartition, ByteBufferMessageSet]
         topicAndPartitionData.foreach(partitionAndData => {
-          val partition = partitionAndData._1.partition
-          val partitionMessageData = partitionAndData._2
+          val partition = partitionAndData._1.partition//获取partition
+          val partitionMessageData = partitionAndData._2//获取
           val bytes = partitionMessageData.buffer
           buffer.putInt(partition)
           buffer.putInt(bytes.limit)
@@ -98,6 +110,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     }
   }
 
+  //该ProducerRequest占用的字节大小
   def sizeInBytes: Int = {
     2 + /* versionId */
     4 + /* correlationId */
@@ -120,6 +133,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     })
   }
 
+  //返回有多少个topic-partition组合数量
   def numPartitions = data.size
 
   override def toString(): String = {
@@ -131,6 +145,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
         requestChannel.closeConnection(request.processor, request)
     }
     else {
+      //data为Map[TopicAndPartition, ByteBufferMessageSet]
       val producerResponseStatus = data.map {
         case (topicAndPartition, data) =>
           (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1l))
@@ -140,6 +155,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     }
   }
 
+  //打印信息,相当于toString方法,参数true表示打印详细信息
   override def describe(details: Boolean): String = {
     val producerRequest = new StringBuilder
     producerRequest.append("Name: " + this.getClass.getSimpleName)
