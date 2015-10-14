@@ -21,18 +21,24 @@ import java.nio._
 import java.nio.channels._
 import kafka.utils._
 
+/**
+ * 从buffer中数据发送到channel中
+ */
 @nonthreadsafe
 private[kafka] class ByteBufferSend(val buffer: ByteBuffer) extends Send {
   
   var complete: Boolean = false
 
+  //根据size大小创建一个ByteBuffer缓冲区,等待向该缓冲区填写数据
   def this(size: Int) = this(ByteBuffer.allocate(size))
   
+  //将bufer数据写入到channel渠道中.返回写入了多少个字节
+  //要想写入数据,说明尚未完成
   def writeTo(channel: GatheringByteChannel): Int = {
-    expectIncomplete()
+    expectIncomplete()//校验,保证尚未完成
     var written = 0
     written += channel.write(buffer)
-    if(!buffer.hasRemaining)
+    if(!buffer.hasRemaining)//如果buffer中没有数据了,则说明发送完了,因此complete设置成true
       complete = true
     written
   }

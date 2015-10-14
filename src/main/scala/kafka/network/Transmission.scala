@@ -56,6 +56,7 @@ trait Receive extends Transmission {
   def readFrom(channel: ReadableByteChannel): Int
   
   //接收数据,ReadableByteChannel 表示数据源,从ReadableByteChannel中读取数据,一般读取到指定的ByteBuffer中
+  //阻塞读取,直到readChannel中的数据都读取完成之后才停止
   def readCompletely(channel: ReadableByteChannel): Int = {
     var totalRead = 0
     while(!complete) {
@@ -78,10 +79,11 @@ trait Send extends Transmission {
   def writeTo(channel: GatheringByteChannel): Int
 
   //向GatheringByteChannel中写入数据,返回写入多少个字节数据
+  //注意:阻塞写入,直到RequestOrResponse中数据都写入完成为止才能推出
   def writeCompletely(channel: GatheringByteChannel): Int = {
     var totalWritten = 0
-    while(!complete) {
-      val written = writeTo(channel)
+    while(!complete) {//只要不完成,就一直去写下去
+      val written = writeTo(channel)//向渠道中写入数据
       trace(written + " bytes written.")
       totalWritten += written
     }

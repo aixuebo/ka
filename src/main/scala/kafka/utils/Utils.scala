@@ -375,6 +375,7 @@ object Utils extends Logging {
   /**
    * Read some bytes into the provided buffer, and return the number of bytes read. If the 
    * channel has been closed or we get -1 on the read for any reason, throw an EOFException
+   * 将ReadableByteChannel的数据写入到buffer中,返回读取了多少个字节
    */
   def read(channel: ReadableByteChannel, buffer: ByteBuffer): Int = {
     channel.read(buffer) match {
