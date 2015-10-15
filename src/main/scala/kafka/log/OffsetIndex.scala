@@ -51,22 +51,32 @@ import kafka.common.InvalidOffsetException
  * 
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal 
  * storage format.
+ * 
+ * 表示一个索引文件
+ * 存储两个int,
+ * 第一个int是在segment中第几个message,如果要计算全局占第几个message,需要用该参数+baseOffset即可
+ * 第二个int表示在该segment文件的哪个节点位置开始插入该offset信息 
+ * 
+ * @param file 表示索引文件
+ * @param baseOffset 代表该log的segment文件第一个message在整个队列中的序号offset
+ * @param maxIndexSize 表示索引文件的最大字节数
+ * 
  */
 class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1) extends Logging {
   
   private val lock = new ReentrantLock
   
-  /* initialize the memory mapping for this index */
+  /* initialize the memory mapping for this index 将索引文件映射到内存中*/
   private var mmap: MappedByteBuffer = 
     {
-      val newlyCreated = file.createNewFile()
+      val newlyCreated = file.createNewFile()//新创举一个该文件
       val raf = new RandomAccessFile(file, "rw")
       try {
         /* pre-allocate the file if necessary */
         if(newlyCreated) {
           if(maxIndexSize < 8)
             throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize)
-          raf.setLength(roundToExactMultiple(maxIndexSize, 8))
+          raf.setLength(roundToExactMultiple(maxIndexSize, 8))//返回第一个参数/8 最近接的整数,例如 67返回的是64,即返回该索引文件最多允许到哪个位置结束
         }
           
         /* memory-map the file */
@@ -74,27 +84,30 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
         val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
           
         /* set the position in the index for the next entry */
-        if(newlyCreated)
+        if(newlyCreated)//因为先创建的文件,因此设置position=0,表示从0开始插入数据
           idx.position(0)
         else
           // if this is a pre-existing index, assume it is all valid and set position to last entry
-          idx.position(roundToExactMultiple(idx.limit, 8))
+          idx.position(roundToExactMultiple(idx.limit, 8))//从最后一个8的倍数位置开始,以后从该位置开始插入数据
         idx
       } finally {
         Utils.swallow(raf.close())
       }
     }
   
-  /* the number of eight-byte entries currently in the index */
+  /* the number of eight-byte entries currently in the index 当前position位置 指示的是第几个索引*/
   private var size = new AtomicInteger(mmap.position / 8)
   
   /**
    * The maximum number of eight-byte entries this index can hold
+   * 当前该索引文件中一共有多少个索引
    */
   @volatile
   var maxEntries = mmap.limit / 8
   
-  /* the last offset in the index */
+  /* the last offset in the index 
+   * 该索引文件中最后一个索引在全局中的序号
+   **/
   var lastOffset = readLastEntry.offset
   
   debug("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d, file position = %d"
@@ -102,6 +115,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
 
   /**
    * The last entry in the index
+   * 获取最后一个索引文件对应的OffsetPosition
    */
   def readLastEntry(): OffsetPosition = {
     inLock(lock) {
@@ -138,20 +152,20 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
    * target offset is stored.
    * 
    * @param idx The index buffer
-   * @param targetOffset The offset to look for
+   * @param targetOffset The offset to look for 该targetOffset是在全局中第几个message
    * 
    * @return The slot found or -1 if the least entry in the index is larger than the target offset or the index is empty
    */
   private def indexSlotFor(idx: ByteBuffer, targetOffset: Long): Int = {
-    // we only store the difference from the base offset so calculate that
+    // we only store the difference from the base offset so calculate that 先获取该segment中的相对位置
     val relOffset = targetOffset - baseOffset
     
     // check if the index is empty
     if(entries == 0)
       return -1
     
-    // check if the target offset is smaller than the least offset
-    if(relativeOffset(idx, 0) > relOffset)
+    // check if the target offset is smaller than the least offset 
+    if(relativeOffset(idx, 0) > relOffset)//
       return -1
       
     // binary search for the entry
@@ -170,16 +184,17 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
     lo
   }
   
-  /* return the nth offset relative to the base offset */
+  /* return the nth offset relative to the base offset 获取该segment中第n个索引对应在全局索引的序号*/
   private def relativeOffset(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8)
   
-  /* return the nth physical position */
+  /* return the nth physical position 获取该segment中第n个索引对应在segment的log文件中的位置*/
   private def physical(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8 + 4)
   
   /**
    * Get the nth offset mapping from the index
    * @param n The entry number in the index
    * @return The offset/position pair at that entry
+   * 获取该索引文件中第n个索引的信息
    */
   def entry(n: Int): OffsetPosition = {
     maybeLock(lock) {
@@ -192,6 +207,8 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   
   /**
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
+   * @param offset 在全部文档中该message属于第几个,注意不是在segment里,而是partition的全局中 
+   * @param position 在该segment的哪个节点位置开始插入该offset信息
    */
   def append(offset: Long, position: Int) {
     inLock(lock) {
@@ -212,11 +229,13 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   
   /**
    * True iff there are no more slots available in this index
+   * 是否索引文件已经写满了
    */
   def isFull: Boolean = entries >= this.maxEntries
   
   /**
    * Truncate the entire index, deleting all entries
+   * 将全部索引信息都删除,但是文件保留,仅仅删除内容
    */
   def truncate() = truncateToEntries(0)
   
@@ -247,12 +266,13 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
 
   /**
    * Truncates index to a known number of entries.
+   * 删除索引,仅仅保留前entries个索引
    */
   private def truncateToEntries(entries: Int) {
     inLock(lock) {
-      this.size.set(entries)
-      mmap.position(this.size.get * 8)
-      this.lastOffset = readLastEntry.offset
+      this.size.set(entries)//先设置索引个数
+      mmap.position(this.size.get * 8)//设置索引文件的最后一个位置
+      this.lastOffset = readLastEntry.offset//设置最后一个索引文件对应的OffsetPosition
     }
   }
   
@@ -321,11 +341,12 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
     this.file.delete()
   }
   
-  /** The number of entries in this index */
+  /** The number of entries in this index 当前position位置 指示的是第几个索引*/
   def entries() = size.get
   
   /**
    * The number of bytes actually used by this index
+   * 当前索引文件的所占字节大小
    */
   def sizeInBytes() = 8 * entries
   
@@ -361,6 +382,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /**
    * Round a number to the greatest exact multiple of the given factor less than the given number.
    * E.g. roundToExactMultiple(67, 8) == 64
+   * 返回第一个参数/8 最近接的整数,例如 67返回的是64
    */
   private def roundToExactMultiple(number: Int, factor: Int) = factor * (number / factor)
   

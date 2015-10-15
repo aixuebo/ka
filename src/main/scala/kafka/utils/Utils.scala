@@ -154,6 +154,7 @@ object Utils extends Logging {
 
   /**
    * Open a channel for the given file
+   * 根据参数返回一个是否支持写的流
    */
   def openChannel(file: File, mutable: Boolean): FileChannel = {
     if(mutable)
@@ -479,6 +480,8 @@ object Utils extends Logging {
 
   /**
    * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
+   * 确保文件s以oldSuffix结尾
+   * 例如xxx.oldSuffix 最后返回xxx.newSuffix
    */
   def replaceSuffix(s: String, oldSuffix: String, newSuffix: String): String = {
     if(!s.endsWith(oldSuffix))

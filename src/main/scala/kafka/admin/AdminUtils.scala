@@ -249,13 +249,14 @@ object AdminUtils extends Logging {
   
   /**
    * Read the topic config (if any) from zk
+   * 读取topic的配置信息集合
    */
   def fetchTopicConfig(zkClient: ZkClient, topic: String): Properties = {
-    val str: String = zkClient.readData(ZkUtils.getTopicConfigPath(topic), true)
+    val str: String = zkClient.readData(ZkUtils.getTopicConfigPath(topic), true)//获取该topic路径对应的数据
     val props = new Properties()
     if(str != null) {
       Json.parseFull(str) match {
-        case None => // there are no config overrides
+        case None => // there are no config overrides 没有数据
         case Some(map: Map[String, _]) => 
           require(map("version") == 1)
           map.get("config") match {

@@ -29,6 +29,9 @@ import kafka.controller.KafkaController.StateChangeLogger
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
+ *  每一个partition缓存的状态对象
+ *  该缓存状态信息通过controller的UpdateMetadataRequest请求更新
+ *  每一个节点保持一样的缓存,更新是异步的
  */
 private[server] class MetadataCache {
   private val cache: mutable.Map[String, mutable.Map[Int, PartitionStateInfo]] =
@@ -37,8 +40,8 @@ private[server] class MetadataCache {
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
   def getTopicMetadata(topics: Set[String]) = {
-    val isAllTopics = topics.isEmpty
-    val topicsRequested = if(isAllTopics) cache.keySet else topics
+    val isAllTopics = topics.isEmpty//是否参数集合为空
+    val topicsRequested = if(isAllTopics) cache.keySet else topics//寻找本次请求的topic集合
     val topicResponses: mutable.ListBuffer[TopicMetadata] = new mutable.ListBuffer[TopicMetadata]
     inReadLock(partitionMetadataLock) {
       for (topic <- topicsRequested) {

@@ -55,6 +55,7 @@ object ZkUtils extends Logging {
     getTopicPath(topic) + "/partitions"
   }
 
+  // /config/topics/topic
   def getTopicConfigPath(topic: String): String =
     TopicConfigPath + "/" + topic
 
@@ -199,6 +200,7 @@ object ZkUtils extends Logging {
 
   /**
    *  make sure a persistent path exists in ZK. Create the path if not exist.
+   *  如果path不存在则创建一个持久化的path,总之该方法确保path持久化存在
    */
   def makeSurePersistentPathExists(client: ZkClient, path: String) {
     if (!client.exists(path))
@@ -444,6 +446,7 @@ object ZkUtils extends Logging {
     (dataStr, stat)
   }
 
+  //读取该path下的内容,可能最后结果是null
   def readDataMaybeNull(client: ZkClient, path: String): (Option[String], Stat) = {
     val stat: Stat = new Stat()
     val dataAndStat = try {

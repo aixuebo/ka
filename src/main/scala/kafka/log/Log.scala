@@ -46,6 +46,8 @@ import com.yammer.metrics.core.Gauge
  * @param scheduler The thread pool scheduler used for background actions
  * @param time The time instance used for checking the clock 
  * 
+ * 每一个TopicAndPartition对应一个日志
+ * 
  */
 @threadsafe
 class Log(val dir: File,
@@ -62,14 +64,16 @@ class Log(val dir: File,
   /* last time it was flushed */
   private val lastflushedTime = new AtomicLong(time.milliseconds)
 
-  /* the actual segments of the log */
+  /** the actual segments of the log 
+   * key是该log的segment的第一个序列号,value是LogSegment
+   **/
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
   loadSegments()
   
   /* Calculate the offset of the next message */
   @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
 
-  val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(name)
+  val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(name)//name为topic-partition组成TopicAndPartition对象的字符串
 
   info("Completed load of log %s with log end offset %d".format(name, logEndOffset))
 
@@ -102,13 +106,16 @@ class Log(val dir: File,
   /** The name of this log */
   def name  = dir.getName()
 
-  /* Load the log segments from the log files on disk */
+  /* Load the log segments from the log files on disk
+   * 从磁盘上加载log的segments
+   **/
   private def loadSegments() {
     // create the log directory if it doesn't exist
     dir.mkdirs()
     
     // first do a pass through the files in the log directory and remove any temporary files 
     // and complete any interrupted swap operations
+    //初始化删除一些临时文件和交换文件操作
     for(file <- dir.listFiles if file.isFile) {
       if(!file.canRead)
         throw new IOException("Could not read file " + file)
@@ -120,6 +127,7 @@ class Log(val dir: File,
         // we crashed in the middle of a swap operation, to recover:
         // if a log, swap it in and delete the .index file
         // if an index just delete it, it will be rebuilt
+        //xxx.swap 最后返回xxx
         val baseName = new File(Utils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if(baseName.getPath.endsWith(IndexFileSuffix)) {
           file.delete()
@@ -137,27 +145,27 @@ class Log(val dir: File,
       }
     }
 
-    // now do a second pass and load all the .log and .index files
+    // now do a second pass and load all the .log and .index files 再次循环一次,加载所有的log和index文件
     for(file <- dir.listFiles if file.isFile) {
       val filename = file.getName
       if(filename.endsWith(IndexFileSuffix)) {
-        // if it is an index file, make sure it has a corresponding .log file
+        // if it is an index file, make sure it has a corresponding .log file 确保该索引文件对应的log文件也存在
         val logFile = new File(file.getAbsolutePath.replace(IndexFileSuffix, LogFileSuffix))
-        if(!logFile.exists) {
+        if(!logFile.exists) {//如果对应的log文件不存在,则删除该索引文件
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
           file.delete()
         }
       } else if(filename.endsWith(LogFileSuffix)) {
-        // if its a log file, load the corresponding log segment
+        // if its a log file, load the corresponding log segment,获取该log文件的segment的num
         val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
-        val hasIndex = Log.indexFilename(dir, start).exists
+        val hasIndex = Log.indexFilename(dir, start).exists//判断该索引文件是否存在
         val segment = new LogSegment(dir = dir, 
                                      startOffset = start,
                                      indexIntervalBytes = config.indexInterval, 
                                      maxIndexSize = config.maxIndexSize,
                                      rollJitterMs = config.randomSegmentJitter,
                                      time = time)
-        if(!hasIndex) {
+        if(!hasIndex) {//如果索引文件不存在
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
@@ -774,10 +782,10 @@ class Log(val dir: File,
  */
 object Log {
   
-  /** a log file */
+  /** a log file 日志文件后缀,命名规则segmengNum.log,eg:22.log*/
   val LogFileSuffix = ".log"
     
-  /** an index file */
+  /** an index file 索引文件后缀*/
   val IndexFileSuffix = ".index"
     
   /** a file that is scheduled to be deleted */
@@ -812,6 +820,7 @@ object Log {
    * Construct a log file name in the given dir with the given base offset
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
+   * 根据偏移量获取文件
    */
   def logFilename(dir: File, offset: Long) = 
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix)
@@ -820,6 +829,7 @@ object Log {
    * Construct an index file name in the given dir using the given base offset
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
+   * 根据偏移量获取索引文件
    */
   def indexFilename(dir: File, offset: Long) = 
     new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix)
@@ -827,6 +837,7 @@ object Log {
 
   /**
    * Parse the topic and partition out of the directory name of a log
+   * topic-partition组成TopicAndPartition对象的字符串
    */
   def parseTopicPartitionName(name: String): TopicAndPartition = {
     val index = name.lastIndexOf('-')

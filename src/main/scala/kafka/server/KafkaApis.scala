@@ -33,6 +33,7 @@ import org.I0Itec.zkclient.ZkClient
 
 /**
  * Logic to handle the various Kafka requests
+ * 逻辑处理器,去处理各种各样的kafka请求
  */
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
@@ -54,8 +55,9 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handle(request: RequestChannel.Request) {
     try{
+      //为远程客户端ip发过来的request请求,进行处理
       trace("Handling request: " + request.requestObj + " from client: " + request.remoteAddress)
-      request.requestId match {
+      request.requestId match {//根据分类不同,进入不同的处理逻辑
         case RequestKeys.ProduceKey => handleProducerOrOffsetCommitRequest(request)
         case RequestKeys.FetchKey => handleFetchRequest(request)
         case RequestKeys.OffsetsKey => handleOffsetRequest(request)
@@ -106,9 +108,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  /**
+   * 确保topic是存在的
+   */
   private def ensureTopicExists(topic: String) = {
     if (metadataCache.getTopicMetadata(Set(topic)).size <= 0)
-      throw new UnknownTopicOrPartitionException("Topic " + topic + " either doesn't exist or is in the process of being deleted")
+      throw new UnknownTopicOrPartitionException("Topic " + topic + " either doesn't exist or is in the process of being deleted")//topic不存在,或者在该进程中被删除
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request) {

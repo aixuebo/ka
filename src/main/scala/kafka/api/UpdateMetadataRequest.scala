@@ -24,6 +24,7 @@ import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import collection.Set
 
+//更新元数据
 object UpdateMetadataRequest {
   val CurrentVersion = 0.shortValue
   val IsInit: Boolean = true

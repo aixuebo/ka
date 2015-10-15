@@ -330,8 +330,9 @@ private[kafka] class Processor(val id: Int,//该处理器的序号
     startupComplete()
     while(isRunning) {
       // setup any new connections that have been queued up 从队列中获取一个客户端的请求,然后读取该请求信息
+      //读取一个request请求
       configureNewConnections()
-      // register any new responses for writing
+      // register any new responses for writing 读取一个response去写数据
       processNewResponses()
       val startSelectTime = SystemTime.nanoseconds
       val ready = selector.select(300)

@@ -75,15 +75,19 @@ class TopicConfigManager(private val zkClient: ZkClient,
   
   /**
    * Process all config changes
+   * 获取所有的topic的config更改节点集合
    */
   private def processAllConfigChanges() {
+    //获取所有的topic的config更改节点集合
     val configChanges = zkClient.getChildren(ZkUtils.TopicConfigChangesPath)
     import JavaConversions._
+    //对变更的信息进行排序,然后进行处理
     processConfigChanges((configChanges: mutable.Buffer[String]).sorted)
   }
 
   /**
    * Process the given list of config changes
+   * 处理变更的config信息
    */
   private def processConfigChanges(notifications: Seq[String]) {
     if (notifications.size > 0) {
@@ -92,18 +96,18 @@ class TopicConfigManager(private val zkClient: ZkClient,
       val logs = logManager.logsByTopicPartition.toBuffer
       val logsByTopic = logs.groupBy(_._1.topic).mapValues(_.map(_._2))
       for (notification <- notifications) {
-        val changeId = changeNumber(notification)
+        val changeId = changeNumber(notification)//返回changId
         if (changeId > lastExecutedChange) {
           val changeZnode = ZkUtils.TopicConfigChangesPath + "/" + notification
-          val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, changeZnode)
+          val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, changeZnode)//读取变更节点的内容
           if(jsonOpt.isDefined) {
             val json = jsonOpt.get
-            val topic = json.substring(1, json.length - 1) // hacky way to dequote
+            val topic = json.substring(1, json.length - 1) // hacky way to dequote 去除json的{}
             if (logsByTopic.contains(topic)) {
               /* combine the default properties with the overrides in zk to create the new LogConfig */
-              val props = new Properties(logManager.defaultConfig.toProps)
-              props.putAll(AdminUtils.fetchTopicConfig(zkClient, topic))
-              val logConfig = LogConfig.fromProps(props)
+              val props = new Properties(logManager.defaultConfig.toProps)//读取默认配置
+              props.putAll(AdminUtils.fetchTopicConfig(zkClient, topic))//读取topic的配置信息集合,/config/topics/topic
+              val logConfig = LogConfig.fromProps(props)//
               for (log <- logsByTopic(topic))
                 log.config = logConfig
               info("Processed topic config change %d for topic %s, setting new config to %s.".format(changeId, topic, props))
@@ -131,11 +135,14 @@ class TopicConfigManager(private val zkClient: ZkClient,
     }
   }
     
-  /* get the change number from a change notification znode */
+  /** get the change number from a change notification znode 
+   * 参数name是以config_change_开头 + 数字,返回该数字
+   **/
   private def changeNumber(name: String): Long = name.substring(AdminUtils.TopicConfigChangeZnodePrefix.length).toLong
   
   /**
    * A listener that applies config changes to logs
+   * 监控子节点变化事件
    */
   object ConfigChangeListener extends IZkChildListener {
     override def handleChildChange(path: String, chillins: java.util.List[String]) {

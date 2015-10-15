@@ -23,22 +23,28 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection._
 import kafka.common._
 
+/**
+ * 配置属性信息
+ */
 object Defaults {
   val SegmentSize = 1024 * 1024
   val SegmentMs = Long.MaxValue
   val SegmentJitterMs = 0L
   val FlushInterval = Long.MaxValue
   val FlushMs = Long.MaxValue
+  
   val RetentionSize = Long.MaxValue
   val RetentionMs = Long.MaxValue
   val MaxMessageSize = Int.MaxValue
-  val MaxIndexSize = 1024 * 1024
-  val IndexInterval = 4096
+  val MaxIndexSize = 1024 * 1024//索引文件的最大字节数
+  val IndexInterval = 4096//索引间隔,每隔多少个字节建立一次索引
+  
   val FileDeleteDelayMs = 60 * 1000L
   val DeleteRetentionMs = 24 * 60 * 60 * 1000L
   val MinCleanableDirtyRatio = 0.5
   val Compact = false
   val UncleanLeaderElectionEnable = true
+  
   val MinInSyncReplicas = 1
 }
 
@@ -111,16 +117,19 @@ object LogConfig {
   val SegmentJitterMsProp = "segment.jitter.ms"
   val SegmentIndexBytesProp = "segment.index.bytes"
   val FlushMessagesProp = "flush.messages"
+  
   val FlushMsProp = "flush.ms"
   val RetentionBytesProp = "retention.bytes"
   val RententionMsProp = "retention.ms"
   val MaxMessageBytesProp = "max.message.bytes"
   val IndexIntervalBytesProp = "index.interval.bytes"
+  
   val DeleteRetentionMsProp = "delete.retention.ms"
   val FileDeleteDelayMsProp = "file.delete.delay.ms"
   val MinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
   val CleanupPolicyProp = "cleanup.policy"
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
+  
   val MinInSyncReplicasProp = "min.insync.replicas"
 
   val ConfigNames = Set(SegmentBytesProp,
@@ -128,16 +137,19 @@ object LogConfig {
                         SegmentJitterMsProp,
                         SegmentIndexBytesProp,
                         FlushMessagesProp,
+                        
                         FlushMsProp,
                         RetentionBytesProp,
                         RententionMsProp,
                         MaxMessageBytesProp,
                         IndexIntervalBytesProp,
+                        
                         FileDeleteDelayMsProp,
                         DeleteRetentionMsProp,
                         MinCleanableDirtyRatioProp,
                         CleanupPolicyProp,
                         UncleanLeaderElectionEnableProp,
+                        
                         MinInSyncReplicasProp)
 
   /**
@@ -149,11 +161,13 @@ object LogConfig {
                   segmentJitterMs = props.getProperty(SegmentJitterMsProp, Defaults.SegmentJitterMs.toString).toLong,
                   maxIndexSize = props.getProperty(SegmentIndexBytesProp, Defaults.MaxIndexSize.toString).toInt,
                   flushInterval = props.getProperty(FlushMessagesProp, Defaults.FlushInterval.toString).toLong,
+                  
                   flushMs = props.getProperty(FlushMsProp, Defaults.FlushMs.toString).toLong,
                   retentionSize = props.getProperty(RetentionBytesProp, Defaults.RetentionSize.toString).toLong,
                   retentionMs = props.getProperty(RententionMsProp, Defaults.RetentionMs.toString).toLong,
                   maxMessageSize = props.getProperty(MaxMessageBytesProp, Defaults.MaxMessageSize.toString).toInt,
                   indexInterval = props.getProperty(IndexIntervalBytesProp, Defaults.IndexInterval.toString).toInt,
+                  
                   fileDeleteDelayMs = props.getProperty(FileDeleteDelayMsProp, Defaults.FileDeleteDelayMs.toString).toInt,
                   deleteRetentionMs = props.getProperty(DeleteRetentionMsProp, Defaults.DeleteRetentionMs.toString).toLong,
                   minCleanableRatio = props.getProperty(MinCleanableDirtyRatioProp,
@@ -162,11 +176,14 @@ object LogConfig {
                     .trim.toLowerCase != "delete",
                   uncleanLeaderElectionEnable = props.getProperty(UncleanLeaderElectionEnableProp,
                     Defaults.UncleanLeaderElectionEnable.toString).toBoolean,
+                    
                   minInSyncReplicas = props.getProperty(MinInSyncReplicasProp,Defaults.MinInSyncReplicas.toString).toInt)
   }
 
   /**
    * Create a log config instance using the given properties and defaults
+   * 1.先添加defaults
+   * 2.再添加overrides做属性覆盖操作
    */
   def fromProps(defaults: Properties, overrides: Properties): LogConfig = {
     val props = new Properties(defaults)
@@ -176,6 +193,7 @@ object LogConfig {
 
   /**
    * Check that property names are valid
+   * 校验props中的属性key必须合法的属性,不允许出现不知道的key
    */
   def validateNames(props: Properties) {
     import JavaConversions._
@@ -185,6 +203,8 @@ object LogConfig {
 
   /**
    * Check that the given properties contain only valid log config names, and that all values can be parsed.
+   * 校验props中的属性key必须合法的属性,不允许出现不知道的key
+   * 并且返回校验后的LogConfig对象
    */
   def validate(props: Properties) {
     validateNames(props)

@@ -29,67 +29,76 @@ import kafka.controller.KafkaController
  * session expiration, instead it assumes the caller will handle it by probably try to re-elect again. If the existing
  * leader is dead, this class will handle automatic re-election and if it succeeds, it invokes the leader state change
  * callback
+ * 选举类
  */
 class ZookeeperLeaderElector(controllerContext: ControllerContext,
                              electionPath: String,
-                             onBecomingLeader: () => Unit,
-                             onResigningAsLeader: () => Unit,
+                             onBecomingLeader: () => Unit,//当该节点变成leader时候执行该函数
+                             onResigningAsLeader: () => Unit,//当重新设置leader选举时,执行该函数
                              brokerId: Int)
   extends LeaderElector with Logging {
-  var leaderId = -1
+  var leaderId = -1//当前leader是什么
   // create the election path in ZK, if one does not exist
+  //如果path不存在则创建一个持久化的path,总之该方法确保path持久化存在,path是最后一个/之前的称之为path.
   val index = electionPath.lastIndexOf("/")
   if (index > 0)
     makeSurePersistentPathExists(controllerContext.zkClient, electionPath.substring(0, index))
+    
   val leaderChangeListener = new LeaderChangeListener
 
   def startup {
     inLock(controllerContext.controllerLock) {
+      //向zookeeper提交一个该节点的监听,当该节点数据有变化时,要通知
       controllerContext.zkClient.subscribeDataChanges(electionPath, leaderChangeListener)
       elect
     }
   }
 
+  //读取该path下的内容,查看谁是leader,然后返回该leader的broker的id
   private def getControllerID(): Int = {
+    //读取该path下的内容,可能最后结果是null
     readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
        case Some(controller) => KafkaController.parseControllerId(controller)
-       case None => -1
+       case None => -1//说明该节点没有数据,则返回-1
     }
   }
     
+  //返回该节点是否选举成功
   def elect: Boolean = {
     val timestamp = SystemTime.milliseconds.toString
     val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
    
-   leaderId = getControllerID 
+   leaderId = getControllerID //获取当前leader
     /* 
      * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition, 
      * it's possible that the controller has already been elected when we get here. This check will prevent the following 
      * createEphemeralPath method from getting into an infinite loop if this broker is already the controller.
+     * 如果leader已经存在了,则停止选举过程,返回该节点是否是leader即可
      */
     if(leaderId != -1) {
        debug("Broker %d has been elected as leader, so stopping the election process.".format(leaderId))
        return amILeader
     }
 
+    //程序到这里,说明leaderId=-1,要进行选举
     try {
       createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, brokerId,
         (controllerString : String, leaderId : Any) => KafkaController.parseControllerId(controllerString) == leaderId.asInstanceOf[Int],
         controllerContext.zkSessionTimeout)
       info(brokerId + " successfully elected as leader")
-      leaderId = brokerId
-      onBecomingLeader()
+      leaderId = brokerId//说明该节点被选举成功
+      onBecomingLeader()//当该节点变成leader时候执行该函数
     } catch {
       case e: ZkNodeExistsException =>
-        // If someone else has written the path, then
-        leaderId = getControllerID 
+        // If someone else has written the path, then 
+        leaderId = getControllerID //说明已经有其他节点选举上了,则获取当前被选举的节点Id
 
         if (leaderId != -1)
           debug("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
         else
           warn("A leader has been elected but just resigned, this will result in another round of election")
 
-      case e2: Throwable =>
+      case e2: Throwable =>//说明选举中出现异常,要重置
         error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
         resign()
     }
@@ -102,6 +111,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
 
   def amILeader : Boolean = leaderId == brokerId
 
+  //重置
   def resign() = {
     leaderId = -1
     deletePath(controllerContext.zkClient, electionPath)
@@ -110,17 +120,21 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
   /**
    * We do not have session expiration listen in the ZkElection, but assuming the caller who uses this module will
    * have its own session expiration listener and handler
+   * 监听path上的data数据的更改和删除事件
+   * 
+   * 参数controllerInfoString:是json格式,解析的内容是哪个broker节点是kafka主节点,返回该主节点的broker的id
    */
   class LeaderChangeListener extends IZkDataListener with Logging {
     /**
      * Called when the leader information stored in zookeeper has changed. Record the new leader in memory
      * @throws Exception On any error.
+     * 更改leader
      */
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {
       inLock(controllerContext.controllerLock) {
-        leaderId = KafkaController.parseControllerId(data.toString)
-        info("New leader is %d".format(leaderId))
+        leaderId = KafkaController.parseControllerId(data.toString)//返回更改后的leader
+        info("New leader is %d".format(leaderId))//日志输出新leader
       }
     }
 
@@ -128,6 +142,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      * Called when the leader information stored in zookeeper has been delete. Try to elect as the leader
      * @throws Exception
      *             On any error.
+     * leader被删除,则重新选举           
      */
     @throws(classOf[Exception])
     def handleDataDeleted(dataPath: String) {

@@ -33,11 +33,11 @@ import java.io.File
  * 
  * A segment with a base offset of [base_offset] would be stored in two files, a [base_offset].index and a [base_offset].log file. 
  * 
- * @param log The message set containing log entries
+ * @param log The message set containing log entries 存储message信息的文件流
  * @param index The offset index
- * @param baseOffset A lower bound on the offsets in this segment
- * @param indexIntervalBytes The approximate number of bytes between entries in the index
- * @param time The time instance
+ * @param baseOffset A lower bound on the offsets in this segment 代表该log的segment文件第一个message在整个队列中的序号offset
+ * @param indexIntervalBytes The approximate number of bytes between entries in the index 代表索引间隔,每隔多少个字节建立一次索引
+ * @param time The time instance 时间调度器
  */
 @nonthreadsafe
 class LogSegment(val log: FileMessageSet, 
@@ -49,9 +49,17 @@ class LogSegment(val log: FileMessageSet,
   
   var created = time.milliseconds
 
-  /* the number of bytes since we last added an entry in the offset index */
+  /* the number of bytes since we last added an entry in the offset index 记录上一次索引到现在已经多少个字节,当达到indexIntervalBytes时候,该值会重置为0*/
   private var bytesSinceLastIndexEntry = 0
   
+  /**
+   * @param dir 代表该log的segment文件所在目录
+   * @param startOffset 代表该log的segment文件第一个message在整个队列中的序号offset
+   * @param indexIntervalBytes 代表索引间隔,每隔多少个字节建立一次索引
+   * @param maxIndexSize 代表索引文件的最大字节数
+   * @param
+   * @param time 时间调度器
+   */
   def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time) =
     this(new FileMessageSet(file = Log.logFilename(dir, startOffset)), 
          new OffsetIndex(file = Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
@@ -60,7 +68,7 @@ class LogSegment(val log: FileMessageSet,
          rollJitterMs,
          time)
     
-  /* Return the size in bytes of this log segment */
+  /* Return the size in bytes of this log segment 该segment日志中目前所占用字节总数*/
   def size: Long = log.sizeInBytes()
   
   /**
@@ -69,20 +77,23 @@ class LogSegment(val log: FileMessageSet,
    * 
    * It is assumed this method is being called from within a lock.
    * 
-   * @param offset The first offset in the message set.
+   * @param offset The first offset in the message set. 在全部文档中该message属于第几个,注意不是在segment里,而是partition的全局中 
    * @param messages The messages to append.
+   * 
+   * 在该segment中插入一个message,并且适当情况下要更新索引文件
    */
   @nonthreadsafe
   def append(offset: Long, messages: ByteBufferMessageSet) {
     if (messages.sizeInBytes > 0) {
+      //在第offset个message地方插入多少个字节作为message信息,在当前segment的第几个字节位置开始插入
       trace("Inserting %d bytes at offset %d at position %d".format(messages.sizeInBytes, offset, log.sizeInBytes()))
       // append an entry to the index (if needed)
-      if(bytesSinceLastIndexEntry > indexIntervalBytes) {
-        index.append(offset, log.sizeInBytes())
-        this.bytesSinceLastIndexEntry = 0
+      if(bytesSinceLastIndexEntry > indexIntervalBytes) {//是否达到了写索引需求
+        index.append(offset, log.sizeInBytes())//写入索引,参数1.在全部文档中该message属于第几个,注意不是在segment里,而是partition的全局中 2.在该segment的哪个节点位置开始插入该offset信息
+        this.bytesSinceLastIndexEntry = 0//记录上一次索引到现在已经多少个字节,当达到indexIntervalBytes时候,该值会重置为0
       }
       // append the messages
-      log.append(messages)
+      log.append(messages)//写入该message信息
       this.bytesSinceLastIndexEntry += messages.sizeInBytes
     }
   }
@@ -273,6 +284,7 @@ class LogSegment(val log: FileMessageSet,
   /**
    * Delete this log segment from the filesystem.
    * @throws KafkaStorageException if the delete fails.
+   * 索引文件和log文件一起删除
    */
   def delete() {
     val deletedLog = log.delete()
@@ -285,11 +297,13 @@ class LogSegment(val log: FileMessageSet,
   
   /**
    * The last modified time of this log segment as a unix time stamp
+   * log文件的最后修改时间
    */
   def lastModified = log.file.lastModified
   
   /**
    * Change the last modified time for this log segment
+   * 设置最后修改时间
    */
   def lastModified_=(ms: Long) = {
     log.file.setLastModified(ms)

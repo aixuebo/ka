@@ -129,6 +129,7 @@ object RequestChannel extends Logging {
   case object CloseConnectionAction extends ResponseAction//表示连接已经关闭,没办法发送response给request
 }
 
+//表示请求的队列
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
   private var responseListeners: List[(Int) => Unit] = Nil//该List集合存储int值
   

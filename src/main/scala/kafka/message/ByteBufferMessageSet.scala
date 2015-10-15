@@ -146,7 +146,9 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     shallowValidByteCount
   }
   
-  /** Write the messages in this set to the given channel */
+  /** Write the messages in this set to the given channel 
+   *  将GatheringByteChannel的信息从offer开始写入到buffer中,写入size个
+   **/
   def writeTo(channel: GatheringByteChannel, offset: Long, size: Int): Int = {
     // Ignore offset and size from input. We just want to write the whole buffer to the channel.
     buffer.mark()

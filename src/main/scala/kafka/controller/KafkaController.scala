@@ -129,6 +129,7 @@ object KafkaController extends Logging {
 
   case class StateChangeLogger(override val loggerName: String) extends Logging
 
+  //参数controllerInfoString:是json格式,解析的内容是哪个broker节点是kafka主节点,返回该主节点的broker的id
   def parseControllerId(controllerInfoString: String): Int = {
     try {
       Json.parseFull(controllerInfoString) match {
@@ -138,6 +139,7 @@ object KafkaController extends Logging {
         case None => throw new KafkaException("Failed to parse the controller info json [%s].".format(controllerInfoString))
       }
     } catch {
+      //json解析失败,可能是使用老版本的kafka,老版本存储的值就是一个int,因此将该值强转成int,如果依然失败,则抛异常说明解析不了
       case t: Throwable =>
         // It may be due to an incompatible controller register version
         warn("Failed to parse the controller info as json. "

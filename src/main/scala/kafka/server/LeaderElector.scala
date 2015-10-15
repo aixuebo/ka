@@ -25,9 +25,9 @@ import kafka.utils.Logging
 trait LeaderElector extends Logging {
   def startup
 
-  def amILeader : Boolean
+  def amILeader : Boolean//该节点是否是leader节点
 
-  def elect: Boolean
+  def elect: Boolean//参与选举,返回该节点是否选举成功
 
   def close
 }
