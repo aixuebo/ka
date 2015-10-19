@@ -31,10 +31,10 @@ object Defaults {
   val SegmentMs = Long.MaxValue
   val SegmentJitterMs = 0L
   val FlushInterval = Long.MaxValue
-  val FlushMs = Long.MaxValue
+  val FlushMs = Long.MaxValue//topic-partition对应的LOG.scala文件flush到磁盘的时间间隔
   
-  val RetentionSize = Long.MaxValue
-  val RetentionMs = Long.MaxValue
+  val RetentionSize = Long.MaxValue//该LOG文件所有的segment文件的字节大小之和,超过了该阀值则要删除一些segment文件
+  val RetentionMs = Long.MaxValue//保留segment文件最长时间,即segment文件最后修改时间超过了该阀值,则将其删除
   val MaxMessageSize = Int.MaxValue
   val MaxIndexSize = 1024 * 1024//索引文件的最大字节数
   val IndexInterval = 4096//索引间隔,每隔多少个字节建立一次索引
@@ -54,9 +54,9 @@ object Defaults {
  * @param segmentMs The soft maximum on the amount of time before a new log segment is rolled
  * @param segmentJitterMs The maximum random jitter subtracted from segmentMs to avoid thundering herds of segment rolling
  * @param flushInterval The number of messages that can be written to the log before a flush is forced
- * @param flushMs The amount of time the log can have dirty data before a flush is forced
- * @param retentionSize The approximate total number of bytes this log can use
- * @param retentionMs The age approximate maximum age of the last segment that is retained
+ * @param flushMs The amount of time the log can have dirty data before a flush is forced,topic-partition对应的LOG.scala文件flush到磁盘的时间间隔
+ * @param retentionSize The approximate total number of bytes this log can use  该LOG文件所有的segment文件的字节大小之和,超过了该阀值则要删除一些segment文件
+ * @param retentionMs The age approximate maximum age of the last segment that is retained 保留segment文件最长时间,即segment文件最后修改时间超过了该阀值,则将其删除
  * @param maxIndexSize The maximum size of an index file
  * @param indexInterval The approximate number of bytes between index entries
  * @param fileDeleteDelayMs The time to wait before deleting a file from the filesystem

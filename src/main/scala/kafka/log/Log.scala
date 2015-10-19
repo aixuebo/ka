@@ -52,7 +52,7 @@ import com.yammer.metrics.core.Gauge
 @threadsafe
 class Log(val dir: File,
           @volatile var config: LogConfig,
-          @volatile var recoveryPoint: Long = 0L,
+          @volatile var recoveryPoint: Long = 0L,//每一个目录,对应一个recovery-point-offset-checkpoint文件,用于标示该目录下topic-partition同步到哪些offset了
           scheduler: Scheduler,
           time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
 
@@ -480,6 +480,7 @@ class Log(val dir: File,
    * starting with the oldest segment and moving forward until a segment doesn't match.
    * @param predicate A function that takes in a single log segment and returns true iff it is deletable
    * @return The number of segments deleted
+   * 删除该LogSegment对应的文件
    */
   def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
     // find any segments that match the user-supplied predicate UNLESS it is the final segment 
@@ -501,6 +502,7 @@ class Log(val dir: File,
 
   /**
    * The size of the log in bytes
+   * 该LOG文件所有的segment文件的字节大小之和
    */
   def size: Long = logSegments.map(_.size).sum
 
@@ -676,6 +678,7 @@ class Log(val dir: File,
 
   /**
    * The time this log is last known to have been fully flushed to disk
+   * 最后一次flush该LOG对象到磁盘的时间
    */
   def lastFlushTime(): Long = lastflushedTime.get
   

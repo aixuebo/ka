@@ -22,8 +22,8 @@ import kafka.server.OffsetManager
 
 
 object Topic {
-  val legalChars = "[a-zA-Z0-9\\._\\-]"
-  private val maxNameLength = 255
+  val legalChars = "[a-zA-Z0-9\\._\\-]"//topic的那么组成正则
+  private val maxNameLength = 255//topic的name最长长度
   private val rgx = new Regex(legalChars + "+")
 
   val InternalTopics = Set(OffsetManager.OffsetsTopicName)

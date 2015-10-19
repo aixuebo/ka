@@ -23,6 +23,7 @@ import java.util.jar.{Attributes, Manifest}
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 
+//获取指定AppInfo.class所在的jar包的/META-INF/MANIFEST.MF文件中version对应的值,并且将其isRegistered属性设置为true
 object AppInfo extends KafkaMetricsGroup {
   private var isRegistered = false
   private val lock = new Object()
@@ -38,12 +39,15 @@ object AppInfo extends KafkaMetricsGroup {
       val clazz = AppInfo.getClass
       val className = clazz.getSimpleName + ".class"
       val classPath = clazz.getResource(className).toString
-      if (!classPath.startsWith("jar")) {
-        // Class not from JAR
+      if (!classPath.startsWith("jar")) {//确保class是在jar包内
+        // Class not from JAR 进入该if,说明class不是在jar包内
         return
       }
-      val manifestPath = classPath.substring(0, classPath.lastIndexOf("!") + 1) + "/META-INF/MANIFEST.MF"
+      
+      //如果classPath是在jar内,则格式demo为:jar:file:/D:/workspaceHive/hiveJdbc/lib/commons-cli-1.2.jar!/org/apache/commons/cli/BasicParser.class
+      val manifestPath = classPath.substring(0, classPath.lastIndexOf("!") + 1) + "/META-INF/MANIFEST.MF"//读取该jar包下的/META-INF/MANIFEST.MF文件
 
+      //获取Version的值
       val mf = new Manifest
       mf.read(new URL(manifestPath).openStream())
       val version = mf.getMainAttributes.get(new Attributes.Name("Version")).toString
