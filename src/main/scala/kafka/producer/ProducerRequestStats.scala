@@ -28,7 +28,10 @@ class ProducerRequestMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup
     case ClientIdAllBrokers(clientId) => Map("clientId" -> clientId)
   }
 
+  //用于统计请求时间
   val requestTimer = new KafkaTimer(newTimer("ProducerRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags))
+  
+  //用于统计请求的字节总数
   val requestSizeHist = newHistogram("ProducerRequestSize", biased = true, tags)
 }
 

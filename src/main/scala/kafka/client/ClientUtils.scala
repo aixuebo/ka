@@ -41,7 +41,7 @@ object ClientUtils extends Logging{
    * @param brokers The brokers in the cluster as configured on the producer through metadata.broker.list
    * @param producerConfig The producer's config
    * @return topic metadata response
-   * 抓取topic元数据
+   * 从Broker节点集合中为topic集合中每一个topic抓取元数据
    */
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false//抓取结果是否成功

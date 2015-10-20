@@ -90,6 +90,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
     val partitionsWithError = new mutable.HashSet[TopicAndPartition]
     var response: FetchResponse = null
     try {
+      //向brokerID 发送请求fetchRequest
       trace("Issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
       response = simpleConsumer.fetch(fetchRequest)
     } catch {

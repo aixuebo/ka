@@ -20,6 +20,9 @@ package kafka.api
 import kafka.cluster.Broker
 import java.nio.ByteBuffer
 
+/**
+ * 为topic抓取元数据的返回值
+ */
 object TopicMetadataResponse {
 
   def readFrom(buffer: ByteBuffer): TopicMetadataResponse = {

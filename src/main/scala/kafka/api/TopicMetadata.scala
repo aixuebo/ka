@@ -24,10 +24,12 @@ import kafka.utils.Logging
 import kafka.common._
 import org.apache.kafka.common.utils.Utils._
 
+//记录一个topic拥有一个PartitionMetadata集合的信息
 object TopicMetadata {
   
-  val NoLeaderNodeId = -1
+  val NoLeaderNodeId = -1//该topic下所有的partition中是没有leader的,即没有设置replicas复制功能
 
+  //从ByteBuffer中反序列化TopicMetadata对象
   def readFrom(buffer: ByteBuffer, brokers: Map[Int, Broker]): TopicMetadata = {
     val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val topic = readShortString(buffer)
@@ -42,12 +44,16 @@ object TopicMetadata {
 }
 
 case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata], errorCode: Short = ErrorMapping.NoError) extends Logging {
+  
+  //该topic对应的PartitionMetadata集合需要多少个字节大小请求
   def sizeInBytes: Int = {
     2 /* error code */ + 
-    shortStringLength(topic) + 
-    4 + partitionsMetadata.map(_.sizeInBytes).sum /* size and partition data array */
+    shortStringLength(topic) + //topic字符串所需要字节长度
+    4 + // partitionsMetadata集合大小,即size,用int表示
+    partitionsMetadata.map(_.sizeInBytes).sum /* size and partition data array 计算集合中每一个PartitionMetadata元素所需要字节大小,然后汇总求和*/
   }
 
+  //将序列化信息写入到ByteBuffer中
   def writeTo(buffer: ByteBuffer) {
     /* error code */
     buffer.putShort(errorCode)
@@ -58,27 +64,31 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
     partitionsMetadata.foreach(m => m.writeTo(buffer))
   }
 
+  /**
+   * 格式化json输出
+   * 
+   */
   override def toString(): String = {
     val topicMetadataInfo = new StringBuilder
     topicMetadataInfo.append("{TopicMetadata for topic %s -> ".format(topic))
     errorCode match {
-      case ErrorMapping.NoError =>
-        partitionsMetadata.foreach { partitionMetadata =>
+      case ErrorMapping.NoError =>//没有异常
+        partitionsMetadata.foreach { partitionMetadata => //循环每一个partition
           partitionMetadata.errorCode match {
-            case ErrorMapping.NoError =>
+            case ErrorMapping.NoError =>//没有异常,则输出该topic-partition对应的信息
               topicMetadataInfo.append("\nMetadata for partition [%s,%d] is %s".format(topic,
                 partitionMetadata.partitionId, partitionMetadata.toString()))
-            case ErrorMapping.ReplicaNotAvailableCode =>
+            case ErrorMapping.ReplicaNotAvailableCode =>//该异常可忽略
               // this error message means some replica other than the leader is not available. The consumer
               // doesn't care about non leader replicas, so ignore this
               topicMetadataInfo.append("\nMetadata for partition [%s,%d] is %s".format(topic,
                 partitionMetadata.partitionId, partitionMetadata.toString()))
-            case _ =>
+            case _ =>//表示topic-partition不可用异常
               topicMetadataInfo.append("\nMetadata for partition [%s,%d] is not available due to %s".format(topic,
                 partitionMetadata.partitionId, ErrorMapping.exceptionFor(partitionMetadata.errorCode).getClass.getName))
           }
         }
-      case _ =>
+      case _ =>//有异常,输出该topic请求中出现的异常className,有可能说明该topic没有对应的partition信息
         topicMetadataInfo.append("\nNo partition metadata for topic %s due to %s".format(topic,
                                  ErrorMapping.exceptionFor(errorCode).getClass.getName))
     }
@@ -87,18 +97,20 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
   }
 }
 
+//关于partition信息的元数据对象,一个topic可以拥有多个该对象
 object PartitionMetadata {
 
+  //从ByteBuffer中反序列化成一个PartitionMetadata对象
   def readFrom(buffer: ByteBuffer, brokers: Map[Int, Broker]): PartitionMetadata = {
     val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val partitionId = readIntInRange(buffer, "partition id", (0, Int.MaxValue)) /* partition id */
     val leaderId = buffer.getInt
-    val leader = brokers.get(leaderId)
+    val leader = brokers.get(leaderId)//返回该leaderId对应的Broker对象
 
-    /* list of all replicas */
+    /* list of all replicas 读取该partitionId的备份数量 */
     val numReplicas = readIntInRange(buffer, "number of all replicas", (0, Int.MaxValue))
-    val replicaIds = (0 until numReplicas).map(_ => buffer.getInt)
-    val replicas = replicaIds.map(brokers)
+    val replicaIds = (0 until numReplicas).map(_ => buffer.getInt)//获取该备份的Broker节点ID集合
+    val replicas = replicaIds.map(brokers)//将Broker节点ID集合映射成Broker集合
 
     /* list of in-sync replicas */
     val numIsr = readIntInRange(buffer, "number of in-sync replicas", (0, Int.MaxValue))
@@ -117,9 +129,9 @@ case class PartitionMetadata(partitionId: Int,
   def sizeInBytes: Int = {
     2 /* error code */ + 
     4 /* partition id */ + 
-    4 /* leader */ + 
-    4 + 4 * replicas.size /* replica array */ + 
-    4 + 4 * isr.size /* isr array */
+    4 /* leader */ + //如果没有leader,则设置为-1
+    4 + 4 * replicas.size /* replica array */ + //第一个4表示replicas的size,每一个replicas对应的Broker的ID要写入到里面,每一个id对应4个字节的int
+    4 + 4 * isr.size /* isr array */ //第一个4表示isr的size,每一个isr对应的Broker的ID要写入到里面,每一个id对应4个字节的int
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -143,12 +155,13 @@ case class PartitionMetadata(partitionId: Int,
     val partitionMetadataString = new StringBuilder
     partitionMetadataString.append("\tpartition " + partitionId)
     partitionMetadataString.append("\tleader: " + (if(leader.isDefined) formatBroker(leader.get) else "none"))
-    partitionMetadataString.append("\treplicas: " + replicas.map(formatBroker).mkString(","))
+    partitionMetadataString.append("\treplicas: " + replicas.map(formatBroker).mkString(","))//将集合中每一个Broker进行格式化,格式化的结果用逗号拆分,组成一个字符串
     partitionMetadataString.append("\tisr: " + isr.map(formatBroker).mkString(","))
     partitionMetadataString.append("\tisUnderReplicated: %s".format(if(isr.size < replicas.size) "true" else "false"))
     partitionMetadataString.toString()
   }
 
+  //将Broker进行格式化
   private def formatBroker(broker: Broker) = broker.id + " (" + formatAddress(broker.host, broker.port) + ")"
 }
 

@@ -29,8 +29,8 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   var topic: String = null
   var brokerList: String = null
   var compressionType: String = null
-  var requiredNumAcks: Int = Int.MaxValue
-  var syncSend: Boolean = false
+  var requiredNumAcks: Int = Int.MaxValue//要求确认字符
+  var syncSend: Boolean = false//是否同步发送
 
   private var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
 
@@ -43,7 +43,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   def getCompressionType: String = compressionType
   def setCompressionType(compressionType: String) { this.compressionType = compressionType }
 
-  def getRequiredNumAcks: Int = requiredNumAcks
+  def getRequiredNumAcks: Int = requiredNumAcks 
   def setRequiredNumAcks(requiredNumAcks: Int) { this.requiredNumAcks = requiredNumAcks }
 
   def getSyncSend: Boolean = syncSend

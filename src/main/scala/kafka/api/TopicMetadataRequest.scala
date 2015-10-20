@@ -25,15 +25,18 @@ import kafka.common.ErrorMapping
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 
+/**
+ * 为topic抓取元数据的请求
+ */
 object TopicMetadataRequest extends Logging {
-  val CurrentVersion = 0.shortValue
+  val CurrentVersion = 0.shortValue//当前版本号
   val DefaultClientId = ""
 
   /**
    * TopicMetadataRequest has the following format -
    * number of topics (4 bytes) list of topics (2 bytes + topic.length per topic) detailedMetadata (2 bytes) timestamp (8 bytes) count (4 bytes)
+   * 从ByteBuffer中反序列化TopicMetadataRequest对象
    */
-
   def readFrom(buffer: ByteBuffer): TopicMetadataRequest = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
@@ -46,15 +49,16 @@ object TopicMetadataRequest extends Logging {
   }
 }
 
-case class TopicMetadataRequest(val versionId: Short,
+case class TopicMetadataRequest(val versionId: Short,//当前请求的版本号,根据kafka源码来编译,一版不会改动
                                 val correlationId: Int,
                                 val clientId: String,
-                                val topics: Seq[String])
+                                val topics: Seq[String])//等待获取元数据的的topic集合
  extends RequestOrResponse(Some(RequestKeys.MetadataKey)){
 
   def this(topics: Seq[String], correlationId: Int) =
     this(TopicMetadataRequest.CurrentVersion, correlationId, TopicMetadataRequest.DefaultClientId, topics)
 
+    //将信息写入到ByteBuffer中
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
@@ -75,7 +79,9 @@ case class TopicMetadataRequest(val versionId: Short,
     describe(true)
   }
 
+  //当请求有异常的时候调用该方法
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    //为每一个topic设置返回的TopicMetadata对象,错误码通过异常class映射
     val topicMetadata = topics.map {
       topic => TopicMetadata(topic, Nil, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     }

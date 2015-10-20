@@ -24,22 +24,25 @@ class DelayedItem[T](val item: T, delay: Long, unit: TimeUnit) extends Delayed w
 
   val createdMs = SystemTime.milliseconds
   val delayMs = {
-    val given = unit.toMillis(delay)
+    val given = unit.toMillis(delay)//根据delay和TimeUnit单位,计算延迟多少毫秒
     if (given < 0 || (createdMs + given) < 0) (Long.MaxValue - createdMs)
     else given
   }
 
+  //构造函数,添加默认时间单位为毫秒
   def this(item: T, delayMs: Long) = 
     this(item, delayMs, TimeUnit.MILLISECONDS)
 
   /**
    * The remaining delay time
+   * 还需要延迟多少TimeUnit单位时间
    */
   def getDelay(unit: TimeUnit): Long = {
     val elapsedMs = (SystemTime.milliseconds - createdMs)
     unit.convert(max(delayMs - elapsedMs, 0), TimeUnit.MILLISECONDS)
   }
-    
+   
+  //按照延迟后的最后时间排序
   def compareTo(d: Delayed): Int = {
     val delayed = d.asInstanceOf[DelayedItem[T]]
     val myEnd = createdMs + delayMs

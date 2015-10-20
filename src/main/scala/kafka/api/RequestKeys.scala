@@ -22,10 +22,10 @@ import java.nio.ByteBuffer
 
 //请求的分类
 object RequestKeys {
-  val ProduceKey: Short = 0
+  val ProduceKey: Short = 0//生产者请求
   val FetchKey: Short = 1
   val OffsetsKey: Short = 2
-  val MetadataKey: Short = 3
+  val MetadataKey: Short = 3//获取topic元数据信息请求,参见TopicMetadataRequest
   val LeaderAndIsrKey: Short = 4
   val StopReplicaKey: Short = 5
   val UpdateMetadataKey: Short = 6

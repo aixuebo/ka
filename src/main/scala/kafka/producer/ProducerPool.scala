@@ -25,24 +25,31 @@ import kafka.utils.Logging
 import kafka.api.TopicMetadata
 import kafka.common.UnavailableProducerException
 
-
+/**
+ * 一个生产者客户端对应一个该生产者连接池,保证该生产者客户端连接不同的Broker,每一个Broker保持一个连接即可
+ */
 object ProducerPool {
   /**
    * Used in ProducerPool to initiate a SyncProducer connection with a broker.
+   * 根据配置信息创建一个同步的生产者,该生产者连接Broker这个节点
    */
   def createSyncProducer(config: ProducerConfig, broker: Broker): SyncProducer = {
     val props = new Properties()
-    props.put("host", broker.host)
-    props.put("port", broker.port.toString)
+    props.put("host", broker.host)//设置该生产者需要连接哪台Broker节点
+    props.put("port", broker.port.toString)//设置该生产者需要连接哪台Broker节点
     props.putAll(config.props.props)
     new SyncProducer(new SyncProducerConfig(props))
   }
 }
 
 class ProducerPool(val config: ProducerConfig) extends Logging {
+  //记录该生产者连接每一台Broker节点的对应关系
+  //可以保证该生产者连接每一个Broker使用一个连接即可
+  //key是该生产者要连接的Broker的Id,value是该生产者产生的同步生产者对象SyncProducer
   private val syncProducers = new HashMap[Int, SyncProducer]
   private val lock = new Object()
 
+  //该生产者创建连接这些topic的leader节点的同步连接
   def updateProducer(topicMetadata: Seq[TopicMetadata]) {
     val newBrokers = new collection.mutable.HashSet[Broker]
     topicMetadata.foreach(tmd => {
@@ -62,6 +69,7 @@ class ProducerPool(val config: ProducerConfig) extends Logging {
     }
   }
 
+  //获取该生产者连接ID为brokerId的节点Broker对应的同步生产者SyncProducer,没有则抛异常,说明该同步生产者还没有创建
   def getProducer(brokerId: Int) : SyncProducer = {
     lock.synchronized {
       val producer = syncProducers.get(brokerId)
@@ -74,6 +82,7 @@ class ProducerPool(val config: ProducerConfig) extends Logging {
 
   /**
    * Closes all the producers in the pool
+   * 关闭该生产者连接的所有Broker节点
    */
   def close() = {
     lock.synchronized {

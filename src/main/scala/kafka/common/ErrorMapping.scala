@@ -28,7 +28,7 @@ object ErrorMapping {
   val EmptyByteBuffer = ByteBuffer.allocate(0)
 
   val UnknownCode : Short = -1
-  val NoError : Short = 0
+  val NoError : Short = 0//没有异常
   val OffsetOutOfRangeCode : Short = 1
   val InvalidMessageCode : Short = 2
   val UnknownTopicOrPartitionCode : Short = 3
