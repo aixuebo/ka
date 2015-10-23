@@ -28,6 +28,9 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, Set}
 import java.util.concurrent.atomic._
 import kafka.api.{TopicMetadata, ProducerRequest}
 
+/**
+ * 生产者将事件发送出去的处理类
+ */
 class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val partitioner: Partitioner,
                                private val encoder: Encoder[V],
@@ -35,14 +38,15 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val producerPool: ProducerPool,
                                private val topicPartitionInfos: HashMap[String, TopicMetadata] = new HashMap[String, TopicMetadata])
   extends EventHandler[K,V] with Logging {
-  val isSync = ("sync" == config.producerType)
+  val isSync = ("sync" == config.producerType)//是否是同步生产者
 
   val correlationId = new AtomicInteger(0)
   val brokerPartitionInfo = new BrokerPartitionInfo(config, producerPool, topicPartitionInfos)
 
-  private val topicMetadataRefreshInterval = config.topicMetadataRefreshIntervalMs
-  private var lastTopicMetadataRefreshTime = 0L
-  private val topicMetadataToRefresh = Set.empty[String]
+  private val topicMetadataRefreshInterval = config.topicMetadataRefreshIntervalMs//刷新topic元数据的周期
+  private var lastTopicMetadataRefreshTime = 0L//上一次刷新topic元数据的时间
+  private val topicMetadataToRefresh = Set.empty[String]//被刷新的topic元数据集合,有效期是一个topicMetadataRefreshInterval时间周期内有效
+  
   private val sendPartitionPerTopicCache = HashMap.empty[String, Int]
 
   private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)//每一个生产者clientId对应一个该对象,该对象作为该生产者的一些统计信息
@@ -58,12 +62,14 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         producerTopicStats.getProducerAllTopicsStats.byteRate.mark(dataSize)
     }
     
-    var outstandingProduceRequests = serializedData
+    var outstandingProduceRequests = serializedData//等待发送出去的请求集合
     var remainingRetries = config.messageSendMaxRetries + 1
-    val correlationIdStart = correlationId.get()
+    val correlationIdStart = correlationId.get()//获取自增长ID
     debug("Handling %d events".format(events.size))//记录本次要处理多少个事件
-    while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
+    while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {//不断尝试发送数据
       topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
+      
+      //将topic元数据信息清空
       if (topicMetadataRefreshInterval >= 0 &&
           SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
         Utils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
@@ -71,6 +77,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         topicMetadataToRefresh.clear
         lastTopicMetadataRefreshTime = SystemTime.milliseconds
       }
+      
       outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
       if (outstandingProduceRequests.size > 0) {
         info("Back off for %d ms before retrying send. Remaining retries = %d".format(config.retryBackoffMs, remainingRetries-1))
@@ -94,7 +101,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   }
 
   private def dispatchSerializedData(messages: Seq[KeyedMessage[K,Message]]): Seq[KeyedMessage[K, Message]] = {
-    val partitionedDataOpt = partitionAndCollate(messages)
+    val partitionedDataOpt = partitionAndCollate(messages)//key是brokerId,value是该brokerId对应的TopicAndPartition-与该TopicAndPartition要写入的message集合映射关系
     partitionedDataOpt match {
       case Some(partitionedData) =>
         val failedProduceRequests = new ArrayBuffer[KeyedMessage[K,Message]]
@@ -146,15 +153,20 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     serializedMessages
   }
 
+  /**
+   * 返回值是Option类型的,即可能是Some也可能是None
+   * Some时返回值内容为Map[Int, collection.mutable.Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]]
+   * 表示:key是brokerId,value是该brokerId对应的TopicAndPartition-与该TopicAndPartition要写入的message集合映射关系
+   */
   def partitionAndCollate(messages: Seq[KeyedMessage[K,Message]]): Option[Map[Int, collection.mutable.Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]]] = {
     val ret = new HashMap[Int, collection.mutable.Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]]
     try {
-      for (message <- messages) {
-        val topicPartitionsList = getPartitionListForTopic(message)
-        val partitionIndex = getPartition(message.topic, message.partitionKey, topicPartitionsList)
-        val brokerPartition = topicPartitionsList(partitionIndex)
+      for (message <- messages) {//循环处理每一个信息元素
+        val topicPartitionsList = getPartitionListForTopic(message)//获取该KeyedMessage要存储的topic对应的partition对象信息
+        val partitionIndex = getPartition(message.topic, message.partitionKey, topicPartitionsList)//获取该key要存储到哪个partition中
+        val brokerPartition = topicPartitionsList(partitionIndex)//获取最后分配的partiton对象
 
-        // postpone the failure until the send operation, so that requests for other brokers are handled correctly
+        // postpone the failure until the send operation, so that requests for other brokers are handled correctly 获取该partition对应的leaderpartition所在brokerId
         val leaderBrokerId = brokerPartition.leaderBrokerIdOpt.getOrElse(-1)
 
         var dataPerBroker: HashMap[TopicAndPartition, Seq[KeyedMessage[K,Message]]] = null
@@ -185,10 +197,20 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     }
   }
 
+  /**
+   * 获取该KeyedMessage要存储的topic对应的partition对象信息
+   */
   private def getPartitionListForTopic(m: KeyedMessage[K,Message]): Seq[PartitionAndLeader] = {
+    /**
+     * 获取该topic对应的元数据集合信息
+     * 并且元数据集合信息是PartitionAndLeader集合形式返回,并且按照partitionId排序了的集合
+     */
     val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(m.topic, correlationId.getAndIncrement)
+    
+    //打印日志,该topic在哪些个partition中
     debug("Broker partitions registered for topic: %s are %s"
       .format(m.topic, topicPartitionsList.map(p => p.partitionId).mkString(",")))
+      
     val totalNumPartitions = topicPartitionsList.length
     if(totalNumPartitions == 0)
       throw new NoBrokersForPartitionException("Partition key = " + m.key)
@@ -199,9 +221,10 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
    * Retrieves the partition id and throws an UnknownTopicOrPartitionException if
    * the value of partition is not between 0 and numPartitions-1
    * @param topic The topic
-   * @param key the partition key
-   * @param topicPartitionList the list of available partitions
-   * @return the partition id
+   * @param key the partition key,按照该key去分配partition
+   * @param topicPartitionList the list of available partitions 属于该topic的所有partition集合
+   * @return the partition id,返回partition集合的index,将该message存储到该partition中
+   * 获取该key要存储到哪个partition中
    */
   private def getPartition(topic: String, key: Any, topicPartitionList: Seq[PartitionAndLeader]): Int = {
     val numPartitions = topicPartitionList.size
@@ -300,7 +323,6 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       *    If the list of compressed topics is empty, then enable the specified compression codec for all topics
       *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
       */
-
     val messagesPerTopicPartition = messagesPerTopicAndPartition.map { case (topicAndPartition, messages) =>
       val rawMessages = messages.map(_.message)
       ( topicAndPartition,

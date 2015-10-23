@@ -30,68 +30,107 @@ import kafka.admin._
 import kafka.common.{KafkaException, NoEpochForPartitionException}
 import kafka.controller.ReassignedPartitionsContext
 import kafka.controller.KafkaController
-import scala.Some
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 import scala.collection
+import scala.Some
 
 object ZkUtils extends Logging {
+  
+  /**
+    * /consumers
+    * /consumers/${group}
+    * /consumers/${group}/ids
+    * /consumers/${group}/offsets/${topic}
+    * /consumers/${owners}/offsets/${topic}
+    * 1./consumers/${group}/ids/${consumerId} 内容{"pattern":"white_list、black_list、static之一","subscription":{"${topic}":2,"${topic}":2}  } 表示该消费者组内的某一个消费者可以消费哪些topic,以及每一个topic消费多少个partition
+   */
   val ConsumersPath = "/consumers"
+  
+  //集群的所有broker的ID集合作为他的子节点,例如 /brokers/ids/1 /brokers/ids/2 表示有2个broker节点,每一个节点的内容是 Json.encode(Map("version" -> 1, "host" -> host, "port" -> port, "jmx_port" -> jmxPort, "timestamp" -> timestamp)) 
   val BrokerIdsPath = "/brokers/ids"
+    /**
+1./brokers/topics/${topic}/partitions/${partitionId}/state 内容{leader:int,leader_epoch:int,isr:List[int],controller_epoch:int}
+  存储该topic-partition的状态信息,即对应的实体是LeaderIsrAndControllerEpoch对象
+2.从路径可以获取所有的topic-partition集合
+3.从路径可以获取所有的topic集合
+4./brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId备份存储
+5.通过4可以获取topic-partition,该组合都在哪些节点有备份
+*/
   val BrokerTopicsPath = "/brokers/topics"
+  
+  
   val TopicConfigPath = "/config/topics"
   val TopicConfigChangesPath = "/config/changes"
-  val ControllerPath = "/controller"
+  val ControllerPath = "/controller"//是json格式,解析的内容是哪个broker节点是kafka主节点,存储内容:{brokerid:5}
   val ControllerEpochPath = "/controller_epoch"
   val ReassignPartitionsPath = "/admin/reassign_partitions"
   val DeleteTopicsPath = "/admin/delete_topics"
   val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
 
+  //return /brokers/topics/${topic}
   def getTopicPath(topic: String): String = {
     BrokerTopicsPath + "/" + topic
   }
-
+  //return /brokers/topics/${topic}/partitions
   def getTopicPartitionsPath(topic: String): String = {
     getTopicPath(topic) + "/partitions"
   }
 
-  // /config/topics/topic
+  // /config/topics/${topic}
   def getTopicConfigPath(topic: String): String =
     TopicConfigPath + "/" + topic
 
+  // /admin/delete_topics/${topic}
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
 
+    
+    //读取/controller节点的内容
   def getController(zkClient: ZkClient): Int = {
     readDataMaybeNull(zkClient, ControllerPath)._1 match {
+      
       case Some(controller) => KafkaController.parseControllerId(controller)
       case None => throw new KafkaException("Controller doesn't exist")
     }
   }
 
+  //return /brokers/topics/${topic}/partitions/${partitionId}
   def getTopicPartitionPath(topic: String, partitionId: Int): String =
     getTopicPartitionsPath(topic) + "/" + partitionId
 
+  //return /brokers/topics/${topic}/partitions/${partitionId}/state
   def getTopicPartitionLeaderAndIsrPath(topic: String, partitionId: Int): String =
     getTopicPartitionPath(topic, partitionId) + "/" + "state"
 
+//获取/brokers/ids节点的子节点集合,即获取当前集群中broker的ID集合,并且排序后返回
   def getSortedBrokerList(zkClient: ZkClient): Seq[Int] =
     ZkUtils.getChildren(zkClient, BrokerIdsPath).map(_.toInt).sorted
 
+  //获取当前集群中合法的broker的对象集合.并且已经排序后返回
   def getAllBrokersInCluster(zkClient: ZkClient): Seq[Broker] = {
     val brokerIds = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerIdsPath).sorted
+    //将ID转换成int,
+    //然后每一个ID---读取/brokers/ids/${brokerId}的内容.即该brokerId对应的host和part最后组装成Broker对象集合返回
+    //过滤掉Broker=none的对象
+    //返回合法的Broker集合
     brokerIds.map(_.toInt).map(getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
   }
 
+  // 获取/brokers/topics/ ${topic}/partitions/${partitionId}/state路径下的内容,生成LeaderIsrAndControllerEpoch对象
   def getLeaderAndIsrForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderAndIsr] = {
     ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partition).map(_.leaderAndIsr)
   }
 
+  // 初始化,建立持久化的path
   def setupCommonPaths(zkClient: ZkClient) {
     for(path <- Seq(ConsumersPath, BrokerIdsPath, BrokerTopicsPath, TopicConfigChangesPath, TopicConfigPath, DeleteTopicsPath))
       makeSurePersistentPathExists(zkClient, path)
   }
 
+  /**
+   * 读取/brokers/topics/${topic}/partitions/${partitionId}/state的内容,获取leader对应的信息
+   */
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
     val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
     leaderAndIsrOpt match {
@@ -109,6 +148,7 @@ object ZkUtils extends Logging {
    * This API should read the epoch in the ISR path. It is sufficient to read the epoch in the ISR path, since if the
    * leader fails after updating epoch in the leader path and before updating epoch in the ISR path, effectively some
    * other broker will retry becoming leader with the same new epoch value.
+   * 读取 /brokers/topics/${topic}/partitions/${partitionId}/state节点信息,返回该leader_epoch对应的内容
    */
   def getEpochForPartition(zkClient: ZkClient, topic: String, partition: Int): Int = {
     val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
@@ -125,6 +165,7 @@ object ZkUtils extends Logging {
 
   /**
    * Gets the in-sync replicas (ISR) for a specific topic and partition
+   * 读取/brokers/topics/${topic}/partitions/${partitionId}/state的内容,获取isr对应的值
    */
   def getInSyncReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[Int] = {
     val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
@@ -140,6 +181,8 @@ object ZkUtils extends Logging {
 
   /**
    * Gets the assigned replicas (AR) for a specific topic and partition
+   * 1.读取/brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId存储
+   * 2.解析内容,属于该partition对应的备份节点集合
    */
   def getReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[Int] = {
     val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
@@ -159,6 +202,7 @@ object ZkUtils extends Logging {
     }
   }
 
+  //创建/brokers/ids/id节点,并且设置该节点的内容,如果冲突,即以前设置过内容,则进行更新操作
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, timeout: Int, jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
@@ -185,7 +229,7 @@ object ZkUtils extends Logging {
     topicDirs.consumerOwnerDir + "/" + partition
   }
 
-
+//更新/brokers/topics/${topic}/partitions/${partitionId}/state下的json内容信息,该方法仅仅是生成待写入的json字符串
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
     Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
                     "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
@@ -193,6 +237,11 @@ object ZkUtils extends Logging {
 
   /**
    * Get JSON partition to replica map from zookeeper.
+   * 将Map转换成json字符串,该Map是/brokers/topics/${topic}的内容
+   * 
+   * @param    Map[String, Seq[Int]] key是partition,value是该partition所在的备份broker的ID集合,例如
+   * 例如:
+   * /brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId备份存储
    */
   def replicaAssignmentZkData(map: Map[String, Seq[Int]]): String = {
     Json.encode(Map("version" -> 1, "partitions" -> map))
@@ -209,6 +258,7 @@ object ZkUtils extends Logging {
 
   /**
    *  create the parent path
+   *  持久化的创建path的父路径
    */
   private def createParentPath(client: ZkClient, path: String): Unit = {
     val parentDir = path.substring(0, path.lastIndexOf('/'))
@@ -218,6 +268,7 @@ object ZkUtils extends Logging {
 
   /**
    * Create an ephemeral node with the given path and data. Create parents if necessary.
+   * 创建临时的path,并且存储数据,该数据path是递归可以一直产生下去的
    */
   private def createEphemeralPath(client: ZkClient, path: String, data: String): Unit = {
     try {
@@ -233,6 +284,8 @@ object ZkUtils extends Logging {
   /**
    * Create an ephemeral node with the given path and data.
    * Throw NodeExistException if node already exists.
+   * 创建临时节点path,并且存储数据data
+   * 注意:如果path已经存在,则要判断data与存在的data是否相同,如果不同则抛异常
    */
   def createEphemeralPathExpectConflict(client: ZkClient, path: String, data: String): Unit = {
     try {
@@ -270,6 +323,9 @@ object ZkUtils extends Logging {
    * trigger the checker function comparing the read data and the expected data,
    * If the checker function returns true then the above bug might be encountered, back off and retry;
    * otherwise re-throw the exception
+   * 
+   * 创建临时节点path,并且存储数据data
+   * 注意:如果path已经存在,则要判断data与存在的data是否相同,如果不同则抛异常
    */
   def createEphemeralPathExpectConflictHandleZKBug(zkClient: ZkClient, path: String, data: String, expectedCallerData: Any, checker: (String, Any) => Boolean, backoffTime: Int): Unit = {
     while (true) {
@@ -282,7 +338,7 @@ object ZkUtils extends Logging {
           // due to a Zookeeper bug, in this case we need to retry writing until the previous node is deleted
           // and hence the write succeeds without ZkNodeExistsException
           ZkUtils.readDataMaybeNull(zkClient, path)._1 match {
-            case Some(writtenData) => {
+            case Some(writtenData) => {//数据节点上的内容
               if (checker(writtenData, expectedCallerData)) {
                 info("I wrote this conflicted ephemeral node [%s] at %s a while back in a different session, ".format(data, path)
                   + "hence I will backoff for this node to be deleted by Zookeeper and retry")
@@ -302,11 +358,14 @@ object ZkUtils extends Logging {
 
   /**
    * Create an persistent node with the given path and data. Create parents if necessary.
+   * 创建永久的path,并且写入data数据,
+   * 注意:该方法会递归path的父节点不断被创建
    */
   def createPersistentPath(client: ZkClient, path: String, data: String = ""): Unit = {
     try {
       client.createPersistent(path, data)
     } catch {
+      //如果节点不存在,则不断创建父节点
       case e: ZkNoNodeException => {
         createParentPath(client, path)
         client.createPersistent(path, data)
@@ -314,6 +373,7 @@ object ZkUtils extends Logging {
     }
   }
 
+  //创建永久的path,并且写入data数据,
   def createSequentialPersistentPath(client: ZkClient, path: String, data: String = ""): String = {
     client.createPersistentSequential(path, data)
   }
@@ -322,6 +382,7 @@ object ZkUtils extends Logging {
    * Update the value of a persistent node with the given path and data.
    * create parrent directory if necessary. Never throw NodeExistException.
    * Return the updated path zkVersion
+   * 更新path下的数据,如果path不存在则创建该path,在写入数据
    */
   def updatePersistentPath(client: ZkClient, path: String, data: String) = {
     try {
@@ -348,15 +409,22 @@ object ZkUtils extends Logging {
    * When there is a ConnectionLossException during the conditional update, zkClient will retry the update and may fail
    * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
    * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
+   * 
+   *   返回元组,1表示是否写入成功.2表示升级后的版本号
+   *   参数 optionalChecker返回值是元组(Boolean, int ),并且是Option类型的,默认值是None,作用是当异常时,将原始数据传回调用方
+   *   
+   *  向path上更新data数据和expectVersion版本号
    */
   def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int,
     optionalChecker:Option[(ZkClient, String, String) => (Boolean,Int)] = None): (Boolean, Int) = {
     try {
+      //向path写入data数据和期望的版本
       val stat = client.writeDataReturnStat(path, data, expectVersion)
       debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
+      //版本号异常,当发现我们传入的optionalChecker方法,该方法是当异常时,将原始数据传回调用方
       case e1: ZkBadVersionException =>
         optionalChecker match {
           case Some(checker) => return checker(client, path, data)
@@ -375,6 +443,7 @@ object ZkUtils extends Logging {
   /**
    * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the current
    * version is not the expected version, etc.) return (false, -1). If path doesn't exist, throws ZkNoNodeException
+   *  持久化的更新path下的data内容,并且仅仅path存在的情况下才允许该操作,如果path不存在则抛异常
    */
   def conditionalUpdatePersistentPathIfExists(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
@@ -394,6 +463,7 @@ object ZkUtils extends Logging {
   /**
    * Update the value of a persistent node with the given path and data.
    * create parrent directory if necessary. Never throw NodeExistException.
+   * 更新临时节点上的数据,如果节点不存在,则创建该节点,并且写入数据
    */
   def updateEphemeralPath(client: ZkClient, path: String, data: String): Unit = {
     try {
@@ -407,6 +477,7 @@ object ZkUtils extends Logging {
     }
   }
 
+  //删除该path
   def deletePath(client: ZkClient, path: String): Boolean = {
     try {
       client.delete(path)
@@ -419,6 +490,7 @@ object ZkUtils extends Logging {
     }
   }
 
+  //递归删除该path
   def deletePathRecursive(client: ZkClient, path: String) {
     try {
       client.deleteRecursive(path)
@@ -430,6 +502,7 @@ object ZkUtils extends Logging {
     }
   }
 
+  //通过zookeeper连接字符串去递归删除path
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
       val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
@@ -440,13 +513,14 @@ object ZkUtils extends Logging {
     }
   }
 
+  //读取path下的数据内容,该数据下面一定不会是null
   def readData(client: ZkClient, path: String): (String, Stat) = {
     val stat: Stat = new Stat()
     val dataStr: String = client.readData(path, stat)
     (dataStr, stat)
   }
 
-  //读取该path下的内容,可能最后结果是null
+  //读取该path下的数据内容,可能最后结果是null
   def readDataMaybeNull(client: ZkClient, path: String): (Option[String], Stat) = {
     val stat: Stat = new Stat()
     val dataAndStat = try {
@@ -459,12 +533,14 @@ object ZkUtils extends Logging {
     dataAndStat
   }
 
+  //获取该path下面的一级子节点集合,该父节点必须存在
   def getChildren(client: ZkClient, path: String): Seq[String] = {
     import scala.collection.JavaConversions._
     // triggers implicit conversion from java list to scala Seq
     client.getChildren(path)
   }
 
+  //获取该path下面的一级子节点集合,该父节点可能不存在
   def getChildrenParentMayNotExist(client: ZkClient, path: String): Seq[String] = {
     import scala.collection.JavaConversions._
     // triggers implicit conversion from java list to scala Seq
@@ -478,13 +554,16 @@ object ZkUtils extends Logging {
 
   /**
    * Check if the given path exists
+   * 校验path是否存在
    */
   def pathExists(client: ZkClient, path: String): Boolean = {
     client.exists(path)
   }
 
+  //读取所有brokers节点,并且创建Broker节点对象
   def getCluster(zkClient: ZkClient) : Cluster = {
     val cluster = new Cluster
+    //获取所有的节点集合
     val nodes = getChildrenParentMayNotExist(zkClient, BrokerIdsPath)
     for (node <- nodes) {
       val brokerZKString = readData(zkClient, BrokerIdsPath + "/" + node)._1
@@ -505,11 +584,17 @@ object ZkUtils extends Logging {
     ret
   }
 
+  /**
+   * 1.读取/brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId存储
+   * 2.解析内容,返回映射关系
+   * 返回值 Map[TopicAndPartition, Seq[Int]] key是topic-partition,value是该partition都在哪些节点有备份
+   */
   def getReplicaAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
     val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>
       val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
       jsonPartitionMapOpt match {
+        
         case Some(jsonPartitionMap) =>
           Json.parseFull(jsonPartitionMap) match {
             case Some(m) => m.asInstanceOf[Map[String, Any]].get("partitions") match {
@@ -529,11 +614,19 @@ object ZkUtils extends Logging {
     ret
   }
 
+  /**
+   * 1.读取/brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId存储
+   * 2.解析内容,返回映射关系
+   * 
+   * 返回key是topic,value的key是该topic的partition,value是该partition对应的brokerId集合
+   */
   def getPartitionAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[String, collection.Map[Int, Seq[Int]]] = {
+    //返回key是topic,value的key是该topic的partition,value是该partition对应的brokerId集合
     val ret = new mutable.HashMap[String, Map[Int, Seq[Int]]]()
     topics.foreach{ topic =>
       val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
       val partitionMap = jsonPartitionMapOpt match {
+        
         case Some(jsonPartitionMap) =>
           Json.parseFull(jsonPartitionMap) match {
             case Some(m) => m.asInstanceOf[Map[String, Any]].get("partitions") match {
@@ -552,10 +645,15 @@ object ZkUtils extends Logging {
     ret
   }
 
+  /**
+   * 1.getPartitionAssignmentForTopics(zkClient, topics) 读取/brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId存储
+   *   返回   Map,key是topic,value的key是该topic的partition,value是该partition对应的brokerId集合
+   * 返回key是topic,value是该topic对应的partition集合.并且partition集合是按照顺序排好序l
+   */
   def getPartitionsForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[String, Seq[Int]] = {
     getPartitionAssignmentForTopics(zkClient, topics).map { topicAndPartitionMap =>
-      val topic = topicAndPartitionMap._1
-      val partitionMap = topicAndPartitionMap._2
+      val topic = topicAndPartitionMap._1//topic
+      val partitionMap = topicAndPartitionMap._2//该topic的partition,value是该partition对应的brokerId集合
       debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
       (topic -> partitionMap.keys.toSeq.sortWith((s,t) => s < t))
     }
@@ -643,6 +741,7 @@ object ZkUtils extends Logging {
     // read the partitions and their new replica list
     val jsonPartitionListOpt = readDataMaybeNull(zkClient, PreferredReplicaLeaderElectionPath)._1
     jsonPartitionListOpt match {
+      
       case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList)
       case None => Set.empty[TopicAndPartition]
     }
@@ -655,21 +754,28 @@ object ZkUtils extends Logging {
     zkClient.delete(brokerPartTopicPath)
   }
 
+  //返回该group下的所有消费者名称集合
   def getConsumersInGroup(zkClient: ZkClient, group: String): Seq[String] = {
     val dirs = new ZKGroupDirs(group)
     getChildren(zkClient, dirs.consumerRegistryDir)
   }
 
+  //返回属于该消费者组的topic与消费者集合映射
   def getConsumersPerTopic(zkClient: ZkClient, group: String, excludeInternalTopics: Boolean) : mutable.Map[String, List[ConsumerThreadId]] = {
     val dirs = new ZKGroupDirs(group)
+    //获取该group下所有的消费者
     val consumers = getChildrenParentMayNotExist(zkClient, dirs.consumerRegistryDir)
+    
+    //key是topic,value是该topic消费的ConsumerThreadId集合
     val consumersPerTopicMap = new mutable.HashMap[String, List[ConsumerThreadId]]
-    for (consumer <- consumers) {
+    for (consumer <- consumers) {//循环每一个消费者
+      //获取该消费者可以消费哪些topic,以及有多少个线程可以去消费该topic
       val topicCount = TopicCount.constructTopicCount(group, consumer, zkClient, excludeInternalTopics)
+      //循环每一个元组,即topic、消费该topic个多少个partition
       for ((topic, consumerThreadIdSet) <- topicCount.getConsumerThreadIdsPerTopic) {
         for (consumerThreadId <- consumerThreadIdSet)
           consumersPerTopicMap.get(topic) match {
-          /**
+                    /**
 合并List
 一个叫做“:::”的方法，可以把两个List连接在一起。
 
@@ -687,6 +793,8 @@ val oneTwoThree = 1 :: twoThree // List(1, 2, 3)
           }
       }
     }
+    
+    //重新排序
     for ( (topic, consumerList) <- consumersPerTopicMap )
       consumersPerTopicMap.put(topic, consumerList.sortWith((s,t) => s < t))
     consumersPerTopicMap
@@ -698,14 +806,18 @@ val oneTwoThree = 1 :: twoThree // List(1, 2, 3)
    * @param brokerId The broker id
    * @param zkClient The zookeeper client connection
    * @return An optional Broker object encapsulating the broker metadata
+   * 获取/brokers/ids/${brokerId}的内容.即该brokerId对应的host和part
+   * 最后组装成Broker对象返回
    */
   def getBrokerInfo(zkClient: ZkClient, brokerId: Int): Option[Broker] = {
     ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1 match {
+      
       case Some(brokerInfo) => Some(Broker.createBroker(brokerId, brokerInfo))
       case None => None
     }
   }
 
+  //获取所有的topic集合
   def getAllTopics(zkClient: ZkClient): Seq[String] = {
     val topics = ZkUtils.getChildrenParentMayNotExist(zkClient, BrokerTopicsPath)
     if(topics == null)
@@ -714,6 +826,7 @@ val oneTwoThree = 1 :: twoThree // List(1, 2, 3)
       topics
   }
 
+  //获取所有的topic-partition集合
   def getAllPartitions(zkClient: ZkClient): Set[TopicAndPartition] = {
     val topics = ZkUtils.getChildrenParentMayNotExist(zkClient, BrokerTopicsPath)
     if(topics == null) Set.empty[TopicAndPartition]
@@ -725,6 +838,7 @@ val oneTwoThree = 1 :: twoThree // List(1, 2, 3)
   }
 }
 
+//zookeeper的内容序列化和反序列化
 object ZKStringSerializer extends ZkSerializer {
 
   @throws(classOf[ZkMarshallingError])
@@ -739,14 +853,28 @@ object ZKStringSerializer extends ZkSerializer {
   }
 }
 
+  /**
+    * /consumers
+    * /consumers/${group}
+    * /consumers/${group}/ids
+   */
 class ZKGroupDirs(val group: String) {
+  //return /consumers
   def consumerDir = ZkUtils.ConsumersPath
+  //return /consumers/${group}
   def consumerGroupDir = consumerDir + "/" + group
+  //return /consumers/${group}/ids
   def consumerRegistryDir = consumerGroupDir + "/ids"
 }
 
+/**
+ * /consumers/${group}/offsets/${topic}
+ * /consumers/${owners}/offsets/${topic}
+ */
 class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) {
+  //return /consumers/${group}/offsets/${topic}
   def consumerOffsetDir = consumerGroupDir + "/offsets/" + topic
+  //return /consumers/${owners}/offsets/${topic}
   def consumerOwnerDir = consumerGroupDir + "/owners/" + topic
 }
 

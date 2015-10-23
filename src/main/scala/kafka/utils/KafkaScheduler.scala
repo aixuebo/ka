@@ -58,14 +58,16 @@ trait Scheduler {
  * @param threads The number of threads in the thread pool
  * @param threadNamePrefix The name to use for scheduler threads. This prefix will have a number appended to it.
  * @param daemon If true the scheduler threads will be "daemon" threads and will not block jvm shutdown.
+ * 多线程调度器
  */
 @threadsafe
 class KafkaScheduler(val threads: Int, 
                      val threadNamePrefix: String = "kafka-scheduler-", 
                      daemon: Boolean = true) extends Scheduler with Logging {
   @volatile private var executor: ScheduledThreadPoolExecutor = null
-  private val schedulerThreadId = new AtomicInteger(0)
+  private val schedulerThreadId = new AtomicInteger(0)//因为参数传递了threads,表示线程池会有多个线程,因此schedulerThreadId属性用于为每一个线程起名字的数字
   
+  //创建线程池,以及当提交一个Runnable时,如何创建该Thread对象
   override def startup() {
     debug("Initializing task scheduler.")
     this synchronized {
@@ -89,6 +91,9 @@ class KafkaScheduler(val threads: Int,
     this.executor = null
   }
 
+  /**
+   * 执行一个线程,该线程调用参数fun函数,该函数是一个无参数的函数,并且该函数无返回值
+   */
   def schedule(name: String, fun: ()=>Unit, delay: Long, period: Long, unit: TimeUnit) = {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
@@ -103,7 +108,7 @@ class KafkaScheduler(val threads: Int,
         trace("Completed execution of scheduled task '%s'.".format(name))
       }
     }
-    if(period >= 0)
+    if(period >= 0)//设置优先级
       executor.scheduleAtFixedRate(runnable, delay, period, unit)
     else
       executor.schedule(runnable, delay, unit)

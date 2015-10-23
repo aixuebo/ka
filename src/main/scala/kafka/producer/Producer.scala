@@ -35,13 +35,13 @@ class Producer[K,V](val config: ProducerConfig,
   //生产者缓存信息的队列
   private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueBufferingMaxMessages)
 
-  private var sync: Boolean = true
-  private var producerSendThread: ProducerSendThread[K,V] = null
+  private var sync: Boolean = true//是否是同步
+  private var producerSendThread: ProducerSendThread[K,V] = null//异步生产者时,需要一个发送线程
   private val lock = new Object()
 
   config.producerType match {
     case "sync" =>
-    case "async" =>
+    case "async" =>//异步的需要开启一个生产者线程,可以批量的发送数据,而不是一条一条发送数据
       sync = false
       producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + config.clientId,
                                                        queue,
@@ -74,14 +74,15 @@ class Producer[K,V](val config: ProducerConfig,
     lock synchronized {
       if (hasShutdown.get)
         throw new ProducerClosedException
-      recordStats(messages)
-      sync match {
-        case true => eventHandler.handle(messages)
-        case false => asyncSend(messages)
+      recordStats(messages)//统计数据信息
+      sync match {//发送数据
+        case true => eventHandler.handle(messages)//同步发送
+        case false => asyncSend(messages)//异步发送
       }
     }
   }
 
+  //统计数据信息
   private def recordStats(messages: Seq[KeyedMessage[K,V]]) {
     for (message <- messages) {
       producerTopicStats.getProducerTopicStats(message.topic).messageRate.mark()
@@ -89,18 +90,19 @@ class Producer[K,V](val config: ProducerConfig,
     }
   }
 
+  //处理异步请求发送数据
   private def asyncSend(messages: Seq[KeyedMessage[K,V]]) {
     for (message <- messages) {
       val added = config.queueEnqueueTimeoutMs match {
         case 0  =>
-          queue.offer(message)
+          queue.offer(message)//直接进入队列
         case _  =>
           try {
             config.queueEnqueueTimeoutMs < 0 match {
-            case true =>
+            case true =>//进入阻塞队列
               queue.put(message)
               true
-            case _ =>
+            case _ =>//队列进入阻塞队列,阻塞事件为N毫秒
               queue.offer(message, config.queueEnqueueTimeoutMs, TimeUnit.MILLISECONDS)
             }
           }
@@ -109,11 +111,11 @@ class Producer[K,V](val config: ProducerConfig,
               false
           }
       }
-      if(!added) {
+      if(!added) {//如果事件向队列中添加失败,记录统计信息,并且抛异常
         producerTopicStats.getProducerTopicStats(message.topic).droppedMessageRate.mark()
         producerTopicStats.getProducerAllTopicsStats.droppedMessageRate.mark()
         throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + message.toString)
-      }else {
+      }else {//添加成功打印日志
         trace("Added to send queue an event: " + message.toString)
         trace("Remaining queue size: " + queue.remainingCapacity)
       }
@@ -126,8 +128,9 @@ class Producer[K,V](val config: ProducerConfig,
    */
   def close() = {
     lock synchronized {
+      //关闭是先将hasShutdown从false设置成true
       val canShutdown = hasShutdown.compareAndSet(false, true)
-      if(canShutdown) {
+      if(canShutdown) {//设置true后,调用异步线程的shutdown、以及调用eventHandler.close方法
         info("Shutting down producer")
         val startTime = System.nanoTime()
         KafkaMetricsGroup.removeAllProducerMetrics(config.clientId)

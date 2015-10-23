@@ -31,12 +31,15 @@ import kafka.api.RequestOrResponse
 import collection.Set
 
 class ControllerChannelManager (private val controllerContext: ControllerContext, config: KafkaConfig) extends Logging {
+  //key是管理与哪个broker节点建立,value:与该节点连接的各种数据的组装对象
   private val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
+  //创建与每个节点的链接,以及各种内存映射关系
   controllerContext.liveBrokers.foreach(addNewBroker(_))
 
+  //打开与每一个节点的线程
   def startup() = {
     brokerLock synchronized {
       brokerStateInfo.foreach(brokerState => startRequestSendThread(brokerState._1))
@@ -49,8 +52,10 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
     }
   }
 
+  //向brokerId节点发送RequestOrResponse请求.请求后回调函数为callback
   def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) {
     brokerLock synchronized {
+      //获取与该brokerId节点的请求队列对象,向请求队列中添加该请求和回调函数
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
@@ -61,6 +66,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
     }
   }
 
+  //单独添加一个节点,与该节点进行连接
   def addBroker(broker: Broker) {
     // be careful here. Maybe the startup() API has already started the request send thread
     brokerLock synchronized {
@@ -78,17 +84,23 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
   }
 
   private def addNewBroker(broker: Broker) {
+    //为每一个Broker创建一个队列,队列缓存的是一组元组
     val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)](config.controllerMessageQueueSize)
+    //尝试连接该Broker
     debug("Controller %d trying to connect to broker %d".format(config.brokerId,broker.id))
     val channel = new BlockingChannel(broker.host, broker.port,
       BlockingChannel.UseDefaultBufferSize,
       BlockingChannel.UseDefaultBufferSize,
       config.controllerSocketTimeoutMs)
+    
+    //线程,按照顺序从队列中获取一个请求,发送到toBroker服务器,接收response数据,调用队列的回调函数
     val requestThread = new RequestSendThread(config.brokerId, controllerContext, broker, messageQueue, channel)
     requestThread.setDaemon(false)
+    
     brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(channel, broker, messageQueue, requestThread))
   }
 
+  //关闭与该节点的链接,情况请求队列,注意 如果队列里面有数据,也不会被请求了
   private def removeExistingBroker(brokerId: Int) {
     try {
       brokerStateInfo(brokerId).channel.disconnect()
@@ -100,6 +112,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
     }
   }
 
+  //打开该节点的线程
   private def startRequestSendThread(brokerId: Int) {
     val requestThread = brokerStateInfo(brokerId).requestSendThread
     if(requestThread.getState == Thread.State.NEW)
@@ -107,18 +120,22 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
   }
 }
 
-class RequestSendThread(val controllerId: Int,
-                        val controllerContext: ControllerContext,
-                        val toBroker: Broker,
-                        val queue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
-                        val channel: BlockingChannel)
+//线程,按照顺序从队列中获取一个请求,发送到toBroker服务器,接收response数据,调用队列的回调函数
+class RequestSendThread(val controllerId: Int,//当前controller的broker节点ID
+                        val controllerContext: ControllerContext,//上下文对象
+                        val toBroker: Broker,//连接到哪个broker,该对象是服务器端
+                        val queue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],//存储队列
+                        val channel: BlockingChannel)//controllerId向toBroker建立连接后的流
   extends ShutdownableThread("Controller-%d-to-broker-%d-send-thread".format(controllerId, toBroker.id)) {
+  
   private val lock = new Object()
   private val stateChangeLogger = KafkaController.stateChangeLogger
+  //真正去连接broker
   connectToBroker(toBroker, channel)
 
+  //不断被线程的run方法调用
   override def doWork(): Unit = {
-    val queueItem = queue.take()
+    val queueItem = queue.take()//取出一组元组
     val request = queueItem._1
     val callback = queueItem._2
     var receive: Receive = null
@@ -133,6 +150,7 @@ class RequestSendThread(val controllerId: Int,
             receive = channel.receive()
             isSendSuccessful = true
           } catch {
+            //如果出现异常,则重新连接broker,并且重新发送信息
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
@@ -144,6 +162,8 @@ class RequestSendThread(val controllerId: Int,
               Utils.swallow(Thread.sleep(300))
           }
         }
+        
+        //根据请求不同,返回不同的response对象
         var response: RequestOrResponse = null
         request.requestId.get match {
           case RequestKeys.LeaderAndIsrKey =>
@@ -156,6 +176,7 @@ class RequestSendThread(val controllerId: Int,
         stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
                                   .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
 
+        //如果设置了回调函数,则调用回调函数,传入response返回值
         if(callback != null) {
           callback(response)
         }
@@ -168,6 +189,7 @@ class RequestSendThread(val controllerId: Int,
     }
   }
 
+  //真正去连接broker
   private def connectToBroker(broker: Broker, channel: BlockingChannel) {
     try {
       channel.connect()
@@ -191,7 +213,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   private val stateChangeLogger = KafkaController.stateChangeLogger
 
   def newBatch() {
-    // raise error if the previous batch is not empty
+    // raise error if the previous batch is not empty 因为要开启一个批处理,因此以前的数据是不应该存在的,因此校验如果存在数据,则抛异常
     if(leaderAndIsrRequestMap.size > 0)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
         "a new one. Some LeaderAndIsr state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
@@ -316,10 +338,10 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   }
 }
 
-case class ControllerBrokerStateInfo(channel: BlockingChannel,
-                                     broker: Broker,
-                                     messageQueue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
-                                     requestSendThread: RequestSendThread)
+case class ControllerBrokerStateInfo(channel: BlockingChannel,//与服务器broker建立连接的socket链接对象
+                                     broker: Broker,//服务器broker节点
+                                     messageQueue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],//存储发往服务器broker节点的数据请求队列
+                                     requestSendThread: RequestSendThread)//真正从messageQueue队列中获取数据,执行发送请求,接收返回值,处理回调函数的线程
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: (RequestOrResponse) => Unit = null)
 

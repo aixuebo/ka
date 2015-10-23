@@ -41,6 +41,8 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    * @param topic the topic for which this information is to be returned
    * @return a sequence of (brokerId, numPartitions). Returns a zero-length
    * sequence if no brokers are available.
+   * 获取该topic对应的元数据集合信息
+   * 并且元数据集合信息是PartitionAndLeader集合形式返回,并且按照partitionId排序了的集合
    */
   def getBrokerPartitionInfo(topic: String, correlationId: Int): Seq[PartitionAndLeader] = {
     debug("Getting broker partition info for topic %s".format(topic))

@@ -22,6 +22,9 @@ import kafka.api.OffsetRequest
 import kafka.utils._
 import kafka.common.{InvalidConfigException, Config}
 
+/**
+ * 消费者的全部配置信息
+ */
 object ConsumerConfig extends Config {
   val RefreshMetadataBackoffMs = 200
   val SocketTimeout = 30 * 1000
@@ -53,6 +56,7 @@ object ConsumerConfig extends Config {
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
   val DefaultClientId = ""
 
+  //各种参数的校验
   def validate(config: ConsumerConfig) {
     validateClientId(config.clientId)
     validateGroupId(config.groupId)

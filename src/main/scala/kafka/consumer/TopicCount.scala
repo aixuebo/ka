@@ -26,10 +26,11 @@ private[kafka] trait TopicCount {
 
   def getConsumerThreadIdsPerTopic: Map[String, Set[ConsumerThreadId]]
   def getTopicCountMap: Map[String, Int]
-  def pattern: String
+  def pattern: String//white_list、black_list、static之一
 
 }
 
+//可以支持按照消费者名称排序，相同消费者的时候以线程id排序
 case class ConsumerThreadId(consumer: String, threadId: Int) extends Ordered[ConsumerThreadId] {
   override def toString = "%s-%d".format(consumer, threadId)
 
@@ -56,6 +57,7 @@ private[kafka] object TopicCount extends Logging {
     consumerThreadIdsPerTopicMap
   }
 
+  ///consumers/${group}/ids/${consumerId} 内容{"pattern":"white_list、black_list、static之一","subscription":{"${topic}":2,"${topic}":2}  }
   def constructTopicCount(group: String, consumerId: String, zkClient: ZkClient, excludeInternalTopics: Boolean) : TopicCount = {
     val dirs = new ZKGroupDirs(group)
     val topicCountString = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)._1
@@ -63,6 +65,7 @@ private[kafka] object TopicCount extends Logging {
     var topMap: Map[String, Int] = null
     try {
       Json.parseFull(topicCountString) match {
+        
         case Some(m) =>
           val consumerRegistrationMap = m.asInstanceOf[Map[String, Any]]
           consumerRegistrationMap.get("pattern") match {
@@ -84,7 +87,7 @@ private[kafka] object TopicCount extends Logging {
     val hasWhiteList = whiteListPattern.equals(subscriptionPattern)
     val hasBlackList = blackListPattern.equals(subscriptionPattern)
 
-    if (topMap.isEmpty || !(hasWhiteList || hasBlackList)) {
+    if (topMap.isEmpty || !(hasWhiteList || hasBlackList)) {//表示topMap是空,或者(没有设置黑名单,并且也没有设置白名单)
       new StaticTopicCount(consumerId, topMap)
     } else {
       val regex = topMap.head._1
@@ -131,8 +134,13 @@ private[kafka] class WildcardTopicCount(zkClient: ZkClient,
                                         numStreams: Int,
                                         excludeInternalTopics: Boolean) extends TopicCount {
   def getConsumerThreadIdsPerTopic = {
+    /**
+     * 1.获取线上所有的topic集合
+     * 2.过滤topic,仅仅需要找到符合正则表达式的topic即可
+     */
     val wildcardTopics = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerTopicsPath)
                          .filter(topic => topicFilter.isTopicAllowed(topic, excludeInternalTopics))
+                         
     TopicCount.makeConsumerThreadIdsPerTopic(consumerIdString, Map(wildcardTopics.map((_, numStreams)): _*))
   }
 

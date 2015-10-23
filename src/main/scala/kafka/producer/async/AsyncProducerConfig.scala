@@ -22,7 +22,7 @@ import kafka.utils.VerifiableProperties
 trait AsyncProducerConfig {
   val props: VerifiableProperties
 
-  /* maximum time, in milliseconds, for buffering data on the producer queue */
+  /* maximum time, in milliseconds, for buffering data on the producer queue 在该队列中最大的缓存时间,超过该时间的数据必须被发送出去*/
   val queueBufferingMaxMs = props.getInt("queue.buffering.max.ms", 5000)
 
   /** the maximum size of the blocking queue for buffering on the producer最多在一个生产者上允许缓存的message记录条数 */
@@ -30,9 +30,9 @@ trait AsyncProducerConfig {
 
   /**
    * Timeout for event enqueue:
-   * 0: events will be enqueued immediately or dropped if the queue is full
-   * -ve: enqueue will block indefinitely if the queue is full
-   * +ve: enqueue will block up to this many milliseconds if the queue is full
+   * 0: events will be enqueued immediately or dropped if the queue is full 如果队列满了,则事件会被丢弃,如果没满,事件会立即进入队列
+   * -ve: enqueue will block indefinitely if the queue is full 如果队列满了,则事件会被阻塞
+   * +ve: enqueue will block up to this many milliseconds if the queue is full 如果队列满了,事件会被阻塞多少毫秒
    */
   val queueEnqueueTimeoutMs = props.getInt("queue.enqueue.timeout.ms", -1)
 

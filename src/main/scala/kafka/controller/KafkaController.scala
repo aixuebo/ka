@@ -41,23 +41,35 @@ import kafka.server._
 import scala.Some
 import kafka.common.TopicAndPartition
 
+/**
+ * Controller的上下文对象
+ */
 class ControllerContext(val zkClient: ZkClient,
                         val zkSessionTimeout: Int) {
+  
   var controllerChannelManager: ControllerChannelManager = null
   val controllerLock: ReentrantLock = new ReentrantLock()
-  var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty
+  
+  var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty//已经进行shuttingDown的Broker节点ID集合
+  
   val brokerShutdownLock: Object = new Object
+  
   var epoch: Int = KafkaController.InitialControllerEpoch - 1
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion - 1
   val correlationId: AtomicInteger = new AtomicInteger(0)
+  
+  //存储管理目前有哪些topic集合
   var allTopics: Set[String] = Set.empty
+  
+  //key是topic-partition对象,value是该partition的备份的ID集合
   var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty
+  
   var partitionLeadershipInfo: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
   var partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
   var partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
 
-  private var liveBrokersUnderlying: Set[Broker] = Set.empty
-  private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
+  private var liveBrokersUnderlying: Set[Broker] = Set.empty//目前存活的Broker节点集合
+  private var liveBrokerIdsUnderlying: Set[Int] = Set.empty//目前存活的Broker节点ID集合
 
   // setter
   def liveBrokers_=(brokers: Set[Broker]) {
@@ -65,13 +77,22 @@ class ControllerContext(val zkClient: ZkClient,
     liveBrokerIdsUnderlying = liveBrokersUnderlying.map(_.id)
   }
 
-  // getter
-  def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
-  def liveBrokerIds = liveBrokerIdsUnderlying.filter(brokerId => !shuttingDownBrokerIds.contains(brokerId))
+  // getter从活着的节点集合中,过滤掉shuttingDownBrokerIds节点
+  def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))//过滤掉shuttingDownBrokerIds节点后,获取当前依然还存活的Broker节点集合
+  def liveBrokerIds = liveBrokerIdsUnderlying.filter(brokerId => !shuttingDownBrokerIds.contains(brokerId))//过滤掉shuttingDownBrokerIds节点后,获取当前依然还存活的Broker节点id集合
 
+  //获取当前存活的节点以及正在shuttingDown的节点集合
   def liveOrShuttingDownBrokerIds = liveBrokerIdsUnderlying
   def liveOrShuttingDownBrokers = liveBrokersUnderlying
 
+  
+  /**
+   * 1.循环参数所有的节点集合
+   * 2.筛选节点集合,如果节点存在备份数据,则保留
+   * 3.返回TopicAndPartition集合,即  该对象记录一个topic-partition集合
+   * 
+   * 即返回给定节点集合中存在的TopicAndPartition集合
+   */
   def partitionsOnBroker(brokerId: Int): Set[TopicAndPartition] = {
     partitionReplicaAssignment
       .filter { case(topicAndPartition, replicas) => replicas.contains(brokerId) }
@@ -79,6 +100,11 @@ class ControllerContext(val zkClient: ZkClient,
       .toSet
   }
 
+  /**
+   * 1.循环参数所有的节点集合
+   * 2.筛选节点集合,如果节点存在备份数据,则保留
+   * 3.返回PartitionAndReplica集合,即  该对象记录一个topic-partition-在broker上有备份,即参数replica就是备份的brokerId
+   */
   def replicasOnBrokers(brokerIds: Set[Int]): Set[PartitionAndReplica] = {
     brokerIds.map { brokerId =>
       partitionReplicaAssignment
@@ -88,6 +114,7 @@ class ControllerContext(val zkClient: ZkClient,
     }.flatten.toSet
   }
 
+  //通过topic获取备份集合
   def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionReplicaAssignment
       .filter { case(topicAndPartition, replicas) => topicAndPartition.topic.equals(topic) }
@@ -98,15 +125,22 @@ class ControllerContext(val zkClient: ZkClient,
     }.flatten.toSet
   }
 
+  //获取指定topic对应的所有TopicAndPartition对象,即该topic有多少个partition
   def partitionsForTopic(topic: String): collection.Set[TopicAndPartition] = {
     partitionReplicaAssignment
       .filter { case(topicAndPartition, replicas) => topicAndPartition.topic.equals(topic) }.keySet
   }
 
+  /**
+   * 返回PartitionAndReplica集合,即  该对象记录一个topic-partition-在broker上有备份,即参数replica就是备份的brokerId
+   * 即返回活着的节点中,哪些节点存在topic-partition备份信息,则返回该详细信息集合
+   */
   def allLiveReplicas(): Set[PartitionAndReplica] = {
+    //参数:过滤掉shuttingDownBrokerIds节点后,获取当前依然还存活的Broker节点id集合
     replicasOnBrokers(liveBrokerIds)
   }
 
+  //通过topic-partition获取备份集合
   def replicasForPartition(partitions: collection.Set[TopicAndPartition]): collection.Set[PartitionAndReplica] = {
     partitions.map { p =>
       val replicas = partitionReplicaAssignment(p)
@@ -114,6 +148,7 @@ class ControllerContext(val zkClient: ZkClient,
     }.flatten
   }
 
+  //删除掉该topic的信息
   def removeTopic(topic: String) = {
     partitionLeadershipInfo = partitionLeadershipInfo.filter{ case (topicAndPartition, _) => topicAndPartition.topic != topic }
     partitionReplicaAssignment = partitionReplicaAssignment.filter{ case (topicAndPartition, _) => topicAndPartition.topic != topic }
@@ -121,7 +156,9 @@ class ControllerContext(val zkClient: ZkClient,
   }
 }
 
-
+/**
+ * 解析kafka的controller节点
+ */
 object KafkaController extends Logging {
   val stateChangeLogger = new StateChangeLogger("state.change.logger")
   val InitialControllerEpoch = 1
@@ -156,15 +193,20 @@ object KafkaController extends Logging {
 class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerState: BrokerState) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private var isRunning = true
-  private val stateChangeLogger = KafkaController.stateChangeLogger
-  val controllerContext = new ControllerContext(zkClient, config.zkSessionTimeoutMs)
-  val partitionStateMachine = new PartitionStateMachine(this)
-  val replicaStateMachine = new ReplicaStateMachine(this)
+  
+  private val stateChangeLogger = KafkaController.stateChangeLogger//log对象
+  val controllerContext = new ControllerContext(zkClient, config.zkSessionTimeoutMs)//创建上下文对象
+  
+  val partitionStateMachine = new PartitionStateMachine(this)//partition的状态机
+  val replicaStateMachine = new ReplicaStateMachine(this)//复制paritition的状态机
+  
   private val controllerElector = new ZookeeperLeaderElector(controllerContext, ZkUtils.ControllerPath, onControllerFailover,
     onControllerResignation, config.brokerId)
+  
   // have a separate scheduler for the controller to be able to start and stop independently of the
-  // kafka server
+  // kafka server单线程任务调度器,用于使用单独的线程执行一个无参数、无返回值的函数
   private val autoRebalanceScheduler = new KafkaScheduler(1)
+  
   var deleteTopicManager: TopicDeletionManager = null
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext, config)
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
@@ -214,6 +256,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
 
   def epoch = controllerContext.epoch
 
+  //设置客户端ID
   def clientId = "id_%d-host_%s-port_%d".format(config.brokerId, config.hostName, config.port)
 
   /**
@@ -1185,6 +1228,7 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
   /**
    * Invoked when some partitions are reassigned by the admin command
    * @throws Exception On any error.
+   * 监听数据修改时间
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
@@ -1212,6 +1256,7 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
    * Called when the leader information stored in zookeeper has been delete. Try to elect as the leader
    * @throws Exception
    *             On any error.
+   * 监听数据删除事件            
    */
   @throws(classOf[Exception])
   def handleDataDeleted(dataPath: String) {
@@ -1319,6 +1364,7 @@ class PreferredReplicaElectionListener(controller: KafkaController) extends IZkD
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
                                        var isrChangeListener: ReassignedPartitionsIsrChangeListener = null)
 
+//该对象记录一个topic-partition-在broker上有备份,即参数replica就是备份的brokerId
 case class PartitionAndReplica(topic: String, partition: Int, replica: Int) {
   override def toString(): String = {
     "[Topic=%s,Partition=%d,Replica=%d]".format(topic, partition, replica)
