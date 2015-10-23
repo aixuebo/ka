@@ -80,6 +80,7 @@ private[kafka] object ZookeeperConsumerConnector {
   val shutdownCommand: FetchedDataChunk = new FetchedDataChunk(null, null, -1L)
 }
 
+//消费者,基于zookeeper的消费者
 private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                 val enableFetcher: Boolean) // for testing only
         extends ConsumerConnector with Logging with KafkaMetricsGroup {
@@ -108,6 +109,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private val zkCommitMeter = newMeter("ZooKeeperCommitsPerSec", "commits", TimeUnit.SECONDS, Map("clientId" -> config.clientId))
   private val rebalanceTimer = new KafkaTimer(newTimer("RebalanceRateAndTime", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, Map("clientId" -> config.clientId)))
 
+  //设置消费者ID,格式是config.groupId_消费者本地ip-时间戳-uuid
   val consumerIdString = {
     var consumerUuid : String = null
     config.consumerId match {
@@ -124,6 +126,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   this.logIdent = "[" + consumerIdString + "], "
 
   connectZk()
+  //为该消费者创建数据抓取管理对象ConsumerFetcherManager
   createFetcher()
   ensureOffsetManagerConnected()
 
@@ -161,17 +164,20 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     wildcardStreamsHandler.streams
   }
 
+  //为消费者创建一个抓取管理对象
   private def createFetcher() {
     if (enableFetcher)
       fetcher = Some(new ConsumerFetcherManager(consumerIdString, config, zkClient))
   }
 
+  //连接zookeeper
   private def connectZk() {
     info("Connecting to zookeeper instance at " + config.zkConnect)
     zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
   }
 
   // Blocks until the offset manager is located and a channel is established to it.
+  //阻塞,直到连接上服务器
   private def ensureOffsetManagerConnected() {
     if (config.offsetsStorage == "kafka") {
       if (offsetsChannel == null || !offsetsChannel.isConnected)

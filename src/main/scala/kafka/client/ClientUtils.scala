@@ -116,11 +116,13 @@ a zipWithIndex // ((100,0), (200,1), (300,2))
 
    /**
     * Creates a blocking channel to a random broker
+    * 连接集群中随机选择任意一个broker节点,返回连接的socket
     */
    def channelToAnyBroker(zkClient: ZkClient, socketTimeoutMs: Int = 3000) : BlockingChannel = {
      var channel: BlockingChannel = null
      var connected = false
      while (!connected) {
+       //获取当前集群中合法的broker的对象集合.并且已经排序后返回
        val allBrokers = getAllBrokersInCluster(zkClient)
        Random.shuffle(allBrokers).find { broker =>
          trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
@@ -145,8 +147,10 @@ a zipWithIndex // ((100,0), (200,1), (300,2))
 
    /**
     * Creates a blocking channel to the offset manager of the given group
+    * 参数retryBackOffMs 表示每次尝试时,要休息多少毫秒
     */
    def channelToOffsetManager(group: String, zkClient: ZkClient, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
+     //连接集群中随机选择任意一个broker节点,返回连接的socket
      var queryChannel = channelToAnyBroker(zkClient)
 
      var offsetManagerChannelOpt: Option[BlockingChannel] = None
@@ -157,9 +161,12 @@ a zipWithIndex // ((100,0), (200,1), (300,2))
 
        while (!coordinatorOpt.isDefined) {
          try {
+           //如果连接已断,在任意选取集群一个broker节点,创建socket连接
            if (!queryChannel.isConnected)
              queryChannel = channelToAnyBroker(zkClient)
+             //但因已经连接到哪个节点
            debug("Querying %s:%d to locate offset manager for %s.".format(queryChannel.host, queryChannel.port, group))
+           
            queryChannel.send(ConsumerMetadataRequest(group))
            val response = queryChannel.receive()
            val consumerMetadataResponse =  ConsumerMetadataResponse.readFrom(response.buffer)

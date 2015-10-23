@@ -23,7 +23,7 @@ import java.nio.ByteBuffer
 //请求的分类
 object RequestKeys {
   val ProduceKey: Short = 0//生产者请求
-  val FetchKey: Short = 1
+  val FetchKey: Short = 1//抓取某些个topic的某些partition,从offset开始,抓取fetchSize个数据
   val OffsetsKey: Short = 2
   val MetadataKey: Short = 3//获取topic元数据信息请求,参见TopicMetadataRequest
   val LeaderAndIsrKey: Short = 4

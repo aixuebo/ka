@@ -28,9 +28,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.nio.ByteBuffer
 import scala.collection.immutable.Map
 
+//表示抓取该Partition的数据最多抓取fetchSize个,从offset开始抓取
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
-
+//抓取某些个topic的某些partition,从offset开始,抓取fetchSize个数据
 object FetchRequest {
   val CurrentVersion = 0.shortValue
   val DefaultMaxWait = 0
@@ -59,6 +60,10 @@ object FetchRequest {
   }
 }
 
+/**
+ * 
+ * 参数requestInfo Map[TopicAndPartition, PartitionFetchInfo],key表示抓取哪个topic-partition数据,value表示从offset开始抓取,抓取多少个数据返回
+ */
 case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         correlationId: Int = FetchRequest.DefaultCorrelationId,
                         clientId: String = ConsumerConfig.DefaultClientId,
@@ -70,6 +75,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
 
   /**
    * Partitions the request info into a map of maps (one for each topic).
+   * 进行按照topic分组
+   * Map[String, Map[TopicAndPartition, PartitionFetchInfo]] key是topic,value中key表示抓取哪个topic-partition数据,value表示从offset开始抓取,抓取多少个数据返回
    */
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
@@ -97,7 +104,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     buffer.putInt(replicaId)
     buffer.putInt(maxWait)
     buffer.putInt(minBytes)
-    buffer.putInt(requestInfoGroupedByTopic.size) // topic count
+    buffer.putInt(requestInfoGroupedByTopic.size) // topic count 要抓取多少个topic数据
+    //写入抓取某个topic的某个partition,从offset开始,抓取fetchSize个数据
     requestInfoGroupedByTopic.foreach {
       case (topic, partitionFetchInfos) =>
         writeShortString(buffer, topic)
@@ -138,7 +146,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
 
   def isFromLowLevelConsumer = replicaId == Request.DebuggingConsumerId
 
-  def numPartitions = requestInfo.size
+  def numPartitions = requestInfo.size//抓取多少个partition
 
   override def toString(): String = {
     describe(true)
@@ -168,6 +176,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   }
 }
 
+//用于配置创建抓取请求对象
 @nonthreadsafe
 class FetchRequestBuilder() {
   private val correlationId = new AtomicInteger(0)
@@ -178,6 +187,7 @@ class FetchRequestBuilder() {
   private var minBytes = FetchRequest.DefaultMinBytes
   private val requestMap = new collection.mutable.HashMap[TopicAndPartition, PartitionFetchInfo]
 
+  //添加要抓取topic-partition上从offset开始,抓取fetchSize个数据
   def addFetch(topic: String, partition: Int, offset: Long, fetchSize: Int) = {
     requestMap.put(TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize))
     this

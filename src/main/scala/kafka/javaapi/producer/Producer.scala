@@ -21,6 +21,9 @@ import kafka.producer.ProducerConfig
 import kafka.producer.KeyedMessage
 import scala.collection.mutable
 
+/**
+ * 对生产者的一个包装类,仅仅用于测试
+ */
 class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for testing only
 {
   def this(config: ProducerConfig) = this(new kafka.producer.Producer[K,V](config))

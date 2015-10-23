@@ -35,7 +35,11 @@ class SimpleConsumer(val host: String,
 
   ConsumerConfig.validateClientId(clientId)
   private val lock = new Object()
+  
+  //链接该host:port
   private val blockingChannel = new BlockingChannel(host, port, bufferSize, BlockingChannel.UseDefaultBufferSize, soTimeout)
+  
+  //用于统计该客户端抓取的信息
   private val fetchRequestAndResponseStats = FetchRequestAndResponseStatsRegistry.getFetchRequestAndResponseStats(clientId)
   private var isClosed = false
 
@@ -50,6 +54,7 @@ class SimpleConsumer(val host: String,
     blockingChannel.disconnect()
   }
 
+  //重连
   private def reconnect() {
     disconnect()
     connect()
@@ -62,6 +67,7 @@ class SimpleConsumer(val host: String,
     }
   }
   
+  //同步发送数据,返回请求结果
   private def sendRequest(request: RequestOrResponse): Receive = {
     lock synchronized {
       var response: Receive = null
@@ -102,6 +108,7 @@ class SimpleConsumer(val host: String,
    *
    *  @param request  specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
    *  @return a set of fetched messages
+   *  抓取某些个topic的某些partition,从offset开始,抓取fetchSize个数据
    */
   def fetch(request: FetchRequest): FetchResponse = {
     var response: Receive = null

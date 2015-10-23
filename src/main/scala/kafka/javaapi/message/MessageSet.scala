@@ -27,7 +27,7 @@ import kafka.message.{MessageAndOffset, InvalidMessageException}
  * as follows:
  * 4 byte size containing an integer N
  * N message bytes as described in the message class
- * 是一组信息集合,这信息集合是按照顺序卸载磁盘或者内存里
+ * 是一组信息集合,这信息集合是按照顺序写在磁盘或者内存里
  * 以下格式
  * 1.4个字节的int表示有多少条记录
  * 2.N条记录是序列化的字节信息

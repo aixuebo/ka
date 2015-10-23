@@ -36,12 +36,14 @@ import java.util.concurrent.atomic.AtomicInteger
  *  Usage:
  *  Once ConsumerFetcherManager is created, startConnections() and stopAllConnections() can be called repeatedly
  *  until shutdown() is called.
+ *  为每一个消费者创建一个该对象,去抓取数据
  */
-class ConsumerFetcherManager(private val consumerIdString: String,
+class ConsumerFetcherManager(private val consumerIdString: String,//标示消费者的唯一ID,格式config.groupId_消费者本地ip-时间戳-uuid
                              private val config: ConsumerConfig,
-                             private val zkClient : ZkClient)
+                             private val zkClient : ZkClient)//zookeeper连接器
         extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds),
                                        config.clientId, config.numConsumerFetchers) {
+
   private var partitionMap: immutable.Map[TopicAndPartition, PartitionTopicInfo] = null
   private var cluster: Cluster = null
   private val noLeaderPartitionSet = new mutable.HashSet[TopicAndPartition]

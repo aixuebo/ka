@@ -23,6 +23,9 @@ import kafka.common.{ClientIdAllBrokers, ClientIdBroker, ClientIdAndBroker}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.Pool
 
+//用于 统计  抓取的请求和返回值 信息
+
+//该class表示具体的统计信息
 class FetchRequestAndResponseMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup {
   val tags = metricId match {
     case ClientIdAndBroker(clientId, brokerHost, brokerPort) =>
@@ -39,14 +42,20 @@ class FetchRequestAndResponseMetrics(metricId: ClientIdBroker) extends KafkaMetr
 /**
  * Tracks metrics of the requests made by a given consumer client to all brokers, and the responses obtained from the brokers.
  * @param clientId ClientId of the given consumer
+ * 统计对象,每一个客户端clientId对应一个该对象
  */
 class FetchRequestAndResponseStats(clientId: String) {
   private val valueFactory = (k: ClientIdBroker) => new FetchRequestAndResponseMetrics(k)
+  
+  //clientId, brokerHost, brokerPort 对应一个FetchRequestAndResponseMetrics对象,可以统计细分到该客户端请求哪些host、port节点的信息
   private val stats = new Pool[ClientIdBroker, FetchRequestAndResponseMetrics](Some(valueFactory))
+  //clientId对应一个FetchRequestAndResponseMetrics对象,可以统计该客户端总体的信息
   private val allBrokersStats = new FetchRequestAndResponseMetrics(new ClientIdAllBrokers(clientId))
 
+  //获取clientId 对应一个FetchRequestAndResponseMetrics对象
   def getFetchRequestAndResponseAllBrokersStats(): FetchRequestAndResponseMetrics = allBrokersStats
 
+  //获取clientId, brokerHost, brokerPort 对应一个FetchRequestAndResponseMetrics对象
   def getFetchRequestAndResponseStats(brokerHost: String, brokerPort: Int): FetchRequestAndResponseMetrics = {
     stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerHost, brokerPort))
   }
@@ -57,12 +66,16 @@ class FetchRequestAndResponseStats(clientId: String) {
  */
 object FetchRequestAndResponseStatsRegistry {
   private val valueFactory = (k: String) => new FetchRequestAndResponseStats(k)
+  
+  //每一个客户端消费者clientId,对应一个统计对象FetchRequestAndResponseStats
   private val globalStats = new Pool[String, FetchRequestAndResponseStats](Some(valueFactory))
 
+  //获取该clientId对应的统计对象FetchRequestAndResponseStats
   def getFetchRequestAndResponseStats(clientId: String) = {
     globalStats.getAndMaybePut(clientId)
   }
 
+  //移除该客户端的统计对象
   def removeConsumerFetchRequestAndResponseStats(clientId: String) {
     val pattern = (".*" + clientId + ".*").r
     val keys = globalStats.keys

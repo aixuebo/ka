@@ -25,12 +25,14 @@ import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.network.{MultiSend, Send}
 import kafka.api.ApiUtils._
 
+//参见RequestKeys.FetchKey
+//抓取某些个topic的某些partition,从offset开始,抓取fetchSize个数据 的返回对象
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
     val error = buffer.getShort
     val hw = buffer.getLong
     val messageSetSize = buffer.getInt
-    val messageSetBuffer = buffer.slice()
+    val messageSetBuffer = buffer.slice()//复制一份
     messageSetBuffer.limit(messageSetSize)
     buffer.position(buffer.position + messageSetSize)
     new FetchResponsePartitionData(error, hw, new ByteBufferMessageSet(messageSetBuffer))
