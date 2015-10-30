@@ -1371,6 +1371,9 @@ case class PartitionAndReplica(topic: String, partition: Int, replica: Int) {
   }
 }
 
+/**
+ * ISR:in-sync replicas
+ */
 case class LeaderIsrAndControllerEpoch(val leaderAndIsr: LeaderAndIsr, controllerEpoch: Int) {
   override def toString(): String = {
     val leaderAndIsrInfo = new StringBuilder

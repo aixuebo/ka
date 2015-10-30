@@ -48,7 +48,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
   
-  /* the offset checkpoints holding the last cleaned point for each log */
+  /* the offset checkpoints holding the last cleaned point for each log 
+   * 每一个file对应一个 OffsetCheckpoint对象,即对应一个cleaner-offset-checkpoint文件
+   **/
   private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, offsetCheckpointFile)))).toMap
 
   /* the set of logs currently being cleaned */
@@ -66,6 +68,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
   /**
    * @return the position processed for all logs.
+   * 从file文件中还原topic-partition对应的offset
    */
   def allCleanerCheckpoints(): Map[TopicAndPartition, Long] =
     checkpoints.values.flatMap(_.read()).toMap
@@ -74,6 +77,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     * Choose the log to clean next and add it to the in-progress set. We recompute this
     * every time off the full set of logs to allow logs to be dynamically added to the pool of logs
     * the log manager maintains.
+    * 获取脏数据
     */
   def grabFilthiestLog(): Option[LogToClean] = {
     inLock(lock) {

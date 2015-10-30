@@ -42,10 +42,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   this.logIdent = "[Kafka Server " + config.brokerId + "], "
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)
-  private var startupComplete = new AtomicBoolean(false)
+  private var startupComplete = new AtomicBoolean(false)//true表示完成了开启状态
   val brokerState: BrokerState = new BrokerState
   val correlationId: AtomicInteger = new AtomicInteger(0)
-  var socketServer: SocketServer = null
+  var socketServer: SocketServer = null//服务端
   var requestHandlerPool: KafkaRequestHandlerPool = null
   var logManager: LogManager = null
   var offsetManager: OffsetManager = null
@@ -139,6 +139,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   private def initZk(): ZkClient = {
     info("Connecting to zookeeper on " + config.zkConnect)
 
+    //连接zookeeper后,创建一个node节点chroot
     val chroot = {
       if (config.zkConnect.indexOf("/") > 0)
         config.zkConnect.substring(config.zkConnect.indexOf("/"))
@@ -155,6 +156,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     }
 
     val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
+    // 初始化,建立持久化的path
     ZkUtils.setupCommonPaths(zkClient)
     zkClient
   }

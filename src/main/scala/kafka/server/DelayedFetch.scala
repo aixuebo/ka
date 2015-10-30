@@ -41,8 +41,7 @@ class DelayedFetch(override val keys: Seq[TopicAndPartition],
                    override val request: RequestChannel.Request,
                    override val delayMs: Long,
                    val fetch: FetchRequest,
-                   private val partitionFetchOffsets: Map[TopicAndPartition, LogOffsetMetadata])
-  extends DelayedRequest(keys, request, delayMs) {
+                   private val partitionFetchOffsets: Map[TopicAndPartition, LogOffsetMetadata]) extends DelayedRequest(keys, request, delayMs) {
 
   def isSatisfied(replicaManager: ReplicaManager) : Boolean = {
     var accumulatedSize = 0

@@ -45,13 +45,17 @@ class Partition(val topic: String,
   private val localBrokerId = replicaManager.config.brokerId
   private val logManager = replicaManager.logManager
   private val zkClient = replicaManager.zkClient
+  //key是partition备份所在节点ID,value是对应的备份对象Replica
   private val assignedReplicaMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock()
+  
   private var zkVersion: Int = LeaderAndIsr.initialZKVersion
   @volatile private var leaderEpoch: Int = LeaderAndIsr.initialLeaderEpoch - 1
-  @volatile var leaderReplicaIdOpt: Option[Int] = None
-  @volatile var inSyncReplicas: Set[Replica] = Set.empty[Replica]
+  
+  @volatile var leaderReplicaIdOpt: Option[Int] = None//该partition对应的leader节点
+  @volatile var inSyncReplicas: Set[Replica] = Set.empty[Replica]//已经同步的备份集合
+  
   /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
    * One way of doing that is through the controller's start replica state change command. When a new broker starts up
    * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
@@ -60,6 +64,7 @@ class Partition(val topic: String,
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   this.logIdent = "Partition [%s,%d] on broker %d: ".format(topic, partitionId, localBrokerId)
 
+  //备份节点是否是本地机器
   private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
 
   newGauge("UnderReplicated",
@@ -71,15 +76,19 @@ class Partition(val topic: String,
     Map("topic" -> topic, "partition" -> partitionId.toString)
   )
 
+  /**
+   * true表示该partition的所有配分文件没有全部同步完成
+   * 1.寻找该partition的leader
+   * 2.该leader中所有分配的备份对象全部同步完成
+   */
   def isUnderReplicated(): Boolean = {
     leaderReplicaIfLocal() match {
-      case Some(_) =>
-        inSyncReplicas.size < assignedReplicas.size
-      case None =>
-        false
+      case Some(_) => inSyncReplicas.size < assignedReplicas.size
+      case None => false
     }
   }
 
+  //获取该partition在replicaId节点上的备份,如果不存在,则创建一个备份对象返回
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
     val replicaOpt = getReplica(replicaId)
     replicaOpt match {
@@ -103,6 +112,7 @@ class Partition(val topic: String,
     }
   }
 
+  //获取该partition在replicaId节点上的备份对象
   def getReplica(replicaId: Int = localBrokerId): Option[Replica] = {
     val replica = assignedReplicaMap.get(replicaId)
     if (replica == null)
@@ -111,6 +121,7 @@ class Partition(val topic: String,
       Some(replica)
   }
 
+  //如果本地是备份的partition的leader,则获取该备份对象Replica,否则返回null
   def leaderReplicaIfLocal(): Option[Replica] = {
     leaderReplicaIdOpt match {
       case Some(leaderReplicaId) =>
@@ -122,14 +133,17 @@ class Partition(val topic: String,
     }
   }
 
+  //为该partition添加一组备份映射
   def addReplicaIfNotExists(replica: Replica) = {
     assignedReplicaMap.putIfNotExists(replica.brokerId, replica)
   }
 
+  //获取该partition对应的全部备份对象
   def assignedReplicas(): Set[Replica] = {
     assignedReplicaMap.values.toSet
   }
 
+  //移除该partition在某一个节点的备份数据
   def removeReplica(replicaId: Int) {
     assignedReplicaMap.remove(replicaId)
   }

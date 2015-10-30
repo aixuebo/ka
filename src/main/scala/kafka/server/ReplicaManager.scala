@@ -56,6 +56,7 @@ class ReplicaManager(val config: KafkaConfig,
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
+  //key是topic-partition组成,value是组成的Partition对象,该对象管理这副本备份信息
   private val allPartitions = new Pool[(String, Int), Partition]
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = new ReplicaFetcherManager(config, this)
@@ -189,6 +190,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  //通过topic-partitionId获取Partition对象,如果不存在,则创建一个对应的Partition对象
   def getOrCreatePartition(topic: String, partitionId: Int): Partition = {
     var partition = allPartitions.get((topic, partitionId))
     if (partition == null) {
@@ -198,6 +200,7 @@ class ReplicaManager(val config: KafkaConfig,
     partition
   }
 
+  //通过topic-partitionId获取Partition对象
   def getPartition(topic: String, partitionId: Int): Option[Partition] = {
     val partition = allPartitions.get((topic, partitionId))
     if (partition == null)
@@ -206,12 +209,17 @@ class ReplicaManager(val config: KafkaConfig,
       Some(partition)
   }
 
+  //通过topic-partitionId获取Partition对象,从而获取第replicaId个备份对象Replica
+  //如果获取不到备份对象Replica,则抛异常
   def getReplicaOrException(topic: String, partition: Int): Replica = {
     val replicaOpt = getReplica(topic, partition)
     if(replicaOpt.isDefined)
       return replicaOpt.get
-    else
+    else{
+      //表示该topic-partiton对应的本机Replica备份对象,是不可用的
       throw new ReplicaNotAvailableException("Replica %d is not available for partition [%s,%d]".format(config.brokerId, topic, partition))
+    }
+      
   }
 
   def getLeaderReplicaIfLocal(topic: String, partitionId: Int): Replica =  {
@@ -229,6 +237,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  //通过topic-partitionId获取Partition对象,从而获取第replicaId个备份对象Replica
   def getReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Option[Replica] =  {
     val partitionOpt = getPartition(topic, partitionId)
     partitionOpt match {
@@ -240,11 +249,12 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Read from all the offset details given and return a map of
    * (topic, partition) -> PartitionData
+   * 输入参数中读取Map fetchRequest.requestInfo.map,内容是key表示抓取哪个topic-partition数据,value表示从offset开始抓取,抓取多少个数据返回
+   * 输出Map的key是抓取哪个topic-partition数据,value是
    */
   def readMessageSets(fetchRequest: FetchRequest) = {
     val isFetchFromFollower = fetchRequest.isFromFollower
-    fetchRequest.requestInfo.map
-    {
+    fetchRequest.requestInfo.map{
       case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
         val partitionDataAndOffsetInfo =
           try {
@@ -281,6 +291,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    * Read from a single topic/partition at the given offset upto maxSize bytes
+   * 从单独一个topic/partition文件中读取数据,从给定offset开始读取,最多读取maxSize个
+   * 参数fromReplicaId 表示从哪个topic/partition读取数据,因为我们topic/partition可能会有多个备份数据
    */
   private def readMessageSet(topic: String,
                              partition: Int,
@@ -288,6 +300,7 @@ class ReplicaManager(val config: KafkaConfig,
                              maxSize: Int,
                              fromReplicaId: Int): (FetchDataInfo, Long) = {
     // check if the current broker is the leader for the partitions
+    //获取该topic-partition对应的一个备份对象Replica
     val localReplica = if(fromReplicaId == Request.DebuggingConsumerId)
       getReplicaOrException(topic, partition)
     else

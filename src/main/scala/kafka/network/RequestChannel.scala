@@ -48,8 +48,8 @@ object RequestChannel extends Logging {
    * buffer参数,包含了RequestKeys中类型以及该类型对应的所有字节信息
    */
   case class Request(processor: Int, requestKey: Any, private var buffer: ByteBuffer, startTimeMs: Long, remoteAddress: SocketAddress = new InetSocketAddress(0)) {
-    @volatile var requestDequeueTimeMs = -1L
-    @volatile var apiLocalCompleteTimeMs = -1L
+    @volatile var requestDequeueTimeMs = -1L//请求出队列时间
+    @volatile var apiLocalCompleteTimeMs = -1L//KafKaApi最终完成事件
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
     

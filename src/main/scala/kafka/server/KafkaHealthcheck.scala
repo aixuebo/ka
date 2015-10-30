@@ -30,6 +30,7 @@ import java.net.InetAddress
  *   
  * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
  * we are dead.
+ * 将broker注册到zookeeper的/brokers/ids/${brokerId}下
  */
 class KafkaHealthcheck(private val brokerId: Int, 
                        private val advertisedHost: String, 
@@ -37,9 +38,11 @@ class KafkaHealthcheck(private val brokerId: Int,
                        private val zkSessionTimeoutMs: Int,
                        private val zkClient: ZkClient) extends Logging {
 
-  val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
+  val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId // /brokers/ids/${brokerId}
+  
   val sessionExpireListener = new SessionExpireListener
 
+  //建立监听对象,并且向zookeeper注册
   def startup() {
     zkClient.subscribeStateChanges(sessionExpireListener)
     register()
@@ -47,6 +50,7 @@ class KafkaHealthcheck(private val brokerId: Int,
 
   /**
    * Register this broker as "alive" in zookeeper
+   * 将该broker注册到 zookeeper中
    */
   def register() {
     val advertisedHostName = 
@@ -61,6 +65,7 @@ class KafkaHealthcheck(private val brokerId: Int,
   /**
    *  When we get a SessionExpired event, we lost all ephemeral nodes and zkclient has reestablished a
    *  connection for us. We need to re-register this broker in the broker registry.
+   *  session过期时,我们需要重新与zookeeper建立连接
    */
   class SessionExpireListener() extends IZkStateListener {
     @throws(classOf[Exception])

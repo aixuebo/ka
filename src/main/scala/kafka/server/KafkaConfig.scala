@@ -71,13 +71,15 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   /*********** General Configuration ***********/
 
-  /* the broker id for this server */
+  /* the broker id for this server 该节点的唯一ID*/
   val brokerId: Int = props.getIntInRange("broker.id", (0, Int.MaxValue))
 
   /* the maximum size of message that the server can receive */
   val messageMaxBytes = props.getIntInRange("message.max.bytes", 1000000 + MessageSet.LogOverhead, (0, Int.MaxValue))
 
-  /* the number of network threads that the server uses for handling network requests */
+  /* the number of network threads that the server uses for handling network requests 
+   * socket服务器端开启多少个线程处理请求 
+   **/
   val numNetworkThreads = props.getIntInRange("num.network.threads", 3, (1, Int.MaxValue))
 
   /* the number of io threads that the server uses for carrying out network requests */
@@ -86,16 +88,22 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the number of threads to use for various background processing tasks */
   val backgroundThreads = props.getIntInRange("background.threads", 10, (1, Int.MaxValue))
 
-  /* the number of queued requests allowed before blocking the network threads */
+  /* the number of queued requests allowed before blocking the network threads
+   * 最大允许队列中存储多少个request请求,与numNetworkThreads对应,每一个线程的队列中最多允许多少个request请求
+   **/
   val queuedMaxRequests = props.getIntInRange("queued.max.requests", 500, (1, Int.MaxValue))
 
   /*********** Socket Server Configuration ***********/
 
-  /* the port to listen and accept connections on */
+  /* the port to listen and accept connections on 
+   * 该服务器的port,用于客户端连接该服务器的host:port
+   **/
   val port: Int = props.getInt("port", 9092)
 
   /* hostname of broker. If this is set, it will only bind to this address. If this is not set,
-   * it will bind to all interfaces */
+   * it will bind to all interfaces 
+   * 该服务器的host,用于客户端连接该服务器的host:port
+   **/
   val hostName: String = props.getString("host.name", null)
 
   /* hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may
@@ -109,22 +117,34 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
    * it will publish the same port that the broker binds to. */
   val advertisedPort: Int = props.getInt("advertised.port", port)
 
-  /* the SO_SNDBUFF buffer of the socket sever sockets */
+  /* the SO_SNDBUFF buffer of the socket sever sockets 
+   * 该socket服务器发送信息的缓存,属于socket设置 
+   **/
   val socketSendBufferBytes: Int = props.getInt("socket.send.buffer.bytes", 100*1024)
 
-  /* the SO_RCVBUFF buffer of the socket sever sockets */
+  /* the SO_RCVBUFF buffer of the socket sever sockets 
+   * 该socket服务器接收信息的缓存,属于socket设置 
+   **/
   val socketReceiveBufferBytes: Int = props.getInt("socket.receive.buffer.bytes", 100*1024)
 
-  /* the maximum number of bytes in a socket request */
+  /* the maximum number of bytes in a socket request
+   * 表示接收的字节最多不允许超过该字节数,因为该类表示服务器,因此接收的数据即请求的数据不允许超过该值 
+   **/
   val socketRequestMaxBytes: Int = props.getIntInRange("socket.request.max.bytes", 100*1024*1024, (1, Int.MaxValue))
   
-  /* the maximum number of connections we allow from each ip address */
+  /* the maximum number of connections we allow from each ip address 
+   * 默认的每一个ip能连接的最多连接次数 
+   **/
   val maxConnectionsPerIp: Int = props.getIntInRange("max.connections.per.ip", Int.MaxValue, (1, Int.MaxValue))
   
-  /* per-ip or hostname overrides to the default maximum number of connections */
+  /* per-ip or hostname overrides to the default maximum number of connections
+   * key是ip,value是该ip最多能连接的次数,该参数与 maxConnectionsPerIp参数联合使用 
+   **/
   val maxConnectionsPerIpOverrides = props.getMap("max.connections.per.ip.overrides").map(entry => (entry._1, entry._2.toInt))
 
-  /* idle connections timeout: the server socket processor threads close the connections that idle more than this */
+  /* idle connections timeout: the server socket processor threads close the connections that idle more than this 
+   * 单位是秒 
+   **/
   val connectionsMaxIdleMs = props.getLong("connections.max.idle.ms", 10*60*1000L)
 
   /*********** Log Configuration ***********/
