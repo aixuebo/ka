@@ -39,25 +39,33 @@ class ReplicaFetcherThread(name:String,
                                 minBytes = brokerConfig.replicaFetchMinBytes,
                                 isInterruptible = false) {
 
-  // process fetched data
+  // process fetched data处理抓取的数据,抓取topic-partition数据,从fetchOffset位置开始抓取,抓取的内容在FetchResponsePartitionData中
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
     try {
       val topic = topicAndPartition.topic
       val partitionId = topicAndPartition.partition
+      //获取本地节点的存储partition的对象
       val replica = replicaMgr.getReplica(topic, partitionId).get
       val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
 
       if (fetchOffset != replica.logEndOffset.messageOffset)
         throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset.messageOffset))
+      
+      //输出某个子节点 从xxx位置开始追加topic-partition的数据,追加xx个信息,leader节点是xxx
       trace("Follower %d has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
             .format(replica.brokerId, replica.logEndOffset.messageOffset, topicAndPartition, messageSet.sizeInBytes, partitionData.hw))
+       
+      //向本地文件写入信息,并且记录日志,xxx节点接收到xxx字节信息后,已经到了日志xxx位置,接收的日志是某个topic-partition的日志
       replica.log.get.append(messageSet, assignOffsets = false)
       trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"
             .format(replica.brokerId, replica.logEndOffset.messageOffset, messageSet.sizeInBytes, topicAndPartition))
+            
+      //获取文件的最后一个位置
       val followerHighWatermark = replica.logEndOffset.messageOffset.min(partitionData.hw)
       // for the follower replica, we do not need to keep
       // its segment base offset the physical position,
       // these values will be computed upon making the leader
+      //做为跟随节点,因此我们不需要保持物理文件的基础位置,这个值仅仅需要被leader计算即可,因此我们只需要记录了followerHighWatermark值即可
       replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
       trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
             .format(replica.brokerId, topic, partitionId, followerHighWatermark))

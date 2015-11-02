@@ -57,17 +57,21 @@ import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
  * On restart the config manager re-processes all notifications. This will usually be wasted work, but avoids any race conditions
  * on startup where a change might be missed between the initial config load and registering for change notifications.
  * 
+ * 该类的作用是定期更新topic的配置信息
+ * 
+ * 参数changeExpirationMs表示过期时间,过期时间到了,则删除/config/changes节点下的某些子节点,即改动将不会生效
  */
 class TopicConfigManager(private val zkClient: ZkClient,
                          private val logManager: LogManager,
                          private val changeExpirationMs: Long = 15*60*1000,
                          private val time: Time = SystemTime) extends Logging {
-  private var lastExecutedChange = -1L
+  private var lastExecutedChange = -1L//上次更新到哪个/config/changes子节点了
   
   /**
    * Begin watching for config changes
    */
   def startup() {
+    //创建/config/changes节点
     ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.TopicConfigChangesPath)
     zkClient.subscribeChildChanges(ZkUtils.TopicConfigChangesPath, ConfigChangeListener)
     processAllConfigChanges()
@@ -88,17 +92,21 @@ class TopicConfigManager(private val zkClient: ZkClient,
   /**
    * Process the given list of config changes
    * 处理变更的config信息
+   * 
+   * 参数是/config/changes节点下的子节点名称集合
    */
   private def processConfigChanges(notifications: Seq[String]) {
     if (notifications.size > 0) {
       info("Processing config change notification(s)...")
       val now = time.milliseconds
       val logs = logManager.logsByTopicPartition.toBuffer
+      //1.Map<TopicAndPartition, Log> 按照topic分组,即Map<Topic,Map<TopicAndPartition, Log>>
+      //2.mapValues表示对map中的value进行处理,即对Map<TopicAndPartition, Log>进行处理,获取Map<TopicAndPartition, Log>中的每一个Log
       val logsByTopic = logs.groupBy(_._1.topic).mapValues(_.map(_._2))
       for (notification <- notifications) {
         val changeId = changeNumber(notification)//返回changId
         if (changeId > lastExecutedChange) {
-          val changeZnode = ZkUtils.TopicConfigChangesPath + "/" + notification
+          val changeZnode = ZkUtils.TopicConfigChangesPath + "/" + notification //获取子节点全路径
           val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, changeZnode)//读取变更节点的内容
           if(jsonOpt.isDefined) {
             val json = jsonOpt.get
@@ -120,6 +128,7 @@ class TopicConfigManager(private val zkClient: ZkClient,
     }
   }
   
+  //删除一些过期节点
   private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
     for(notification <- notifications.sorted) {
       val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.TopicConfigChangesPath + "/" + notification)
@@ -137,12 +146,14 @@ class TopicConfigManager(private val zkClient: ZkClient,
     
   /** get the change number from a change notification znode 
    * 参数name是以config_change_开头 + 数字,返回该数字
+   * eg:config_change_5
    **/
   private def changeNumber(name: String): Long = name.substring(AdminUtils.TopicConfigChangeZnodePrefix.length).toLong
   
   /**
    * A listener that applies config changes to logs
    * 监控子节点变化事件
+   * 监听/config/changes节点的子节点变化
    */
   object ConfigChangeListener extends IZkChildListener {
     override def handleChildChange(path: String, chillins: java.util.List[String]) {

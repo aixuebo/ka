@@ -595,6 +595,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  //获取所有的leader partition对象
   private def getLeaderPartitions() : List[Partition] = {
     allPartitions.values.filter(_.leaderReplicaIfLocal().isDefined).toList
   }

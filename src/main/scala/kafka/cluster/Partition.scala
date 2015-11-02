@@ -90,7 +90,7 @@ class Partition(val topic: String,
 
   //获取该partition在replicaId节点上的备份,如果不存在,则创建一个备份对象返回
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
-    val replicaOpt = getReplica(replicaId)
+    val replicaOpt = getReplica(replicaId)//获取该partition在replicaId节点上的备份对象
     replicaOpt match {
       case Some(replica) => replica
       case None =>
@@ -376,6 +376,7 @@ class Partition(val topic: String,
     stuckReplicas ++ slowReplicas
   }
 
+  //向该partition追加一条ByteBufferMessageSet信息
   def appendMessagesToLeader(messages: ByteBufferMessageSet, requiredAcks: Int=0) = {
     inReadLock(leaderIsrUpdateLock) {
       val leaderReplicaOpt = leaderReplicaIfLocal()

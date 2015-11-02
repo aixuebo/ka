@@ -1373,6 +1373,11 @@ case class PartitionAndReplica(topic: String, partition: Int, replica: Int) {
 
 /**
  * ISR:in-sync replicas
+"controller_epoch": 表示kafka集群中的中央控制器选举次数,
+"leader": 表示该partition选举leader的brokerId,
+"version": 版本编号默认为1,
+"leader_epoch": 该partition leader选举次数,
+"isr": [同步副本组brokerId列表]
  */
 case class LeaderIsrAndControllerEpoch(val leaderAndIsr: LeaderAndIsr, controllerEpoch: Int) {
   override def toString(): String = {

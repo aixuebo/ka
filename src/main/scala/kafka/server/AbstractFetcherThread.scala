@@ -35,6 +35,11 @@ import com.yammer.metrics.core.Gauge
 
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
+ *  消费者clientId,要向sourceBroker该节点发送请求,获取数据
+ */
+
+/**
+ * @fetchSize 表示每次抓取的数据数量
  */
 abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
                                      fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1,
@@ -87,7 +92,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   private def processFetchRequest(fetchRequest: FetchRequest) {
-    val partitionsWithError = new mutable.HashSet[TopicAndPartition]
+    val partitionsWithError = new mutable.HashSet[TopicAndPartition]//抓取失败的TopicAndPartition集合
     var response: FetchResponse = null
     try {
       //向brokerID 发送请求fetchRequest
@@ -104,6 +109,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
     }
     fetcherStats.requestRate.mark()
 
+    //抓取成功后,处理抓取返回的数据
     if (response != null) {
       // process fetched data
       inLock(partitionMapLock) {

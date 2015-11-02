@@ -250,6 +250,7 @@ object AdminUtils extends Logging {
   /**
    * Read the topic config (if any) from zk
    * 读取topic的配置信息集合
+   * 内容格式:{version:1,config:{key=value,key=value}}
    */
   def fetchTopicConfig(zkClient: ZkClient, topic: String): Properties = {
     val str: String = zkClient.readData(ZkUtils.getTopicConfigPath(topic), true)//获取该topic路径对应的数据
@@ -272,6 +273,7 @@ object AdminUtils extends Logging {
     props
   }
 
+  //返回map,key是topic的name,value是该topic的独特的配置信息
   def fetchAllTopicConfigs(zkClient: ZkClient): Map[String, Properties] =
     ZkUtils.getAllTopics(zkClient).map(topic => (topic, fetchTopicConfig(zkClient, topic))).toMap
 

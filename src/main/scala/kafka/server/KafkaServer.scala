@@ -324,6 +324,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                      minCleanableRatio = config.logCleanerMinCleanRatio,
                                      compact = config.logCleanupPolicy.trim.toLowerCase == "compact")
     val defaultProps = defaultLogConfig.toProps
+    
+    //针对每一个topic有单独的配置信息,与默认配置信息合并覆盖操作
+    //configs是一个Map<String, LogConfig>,可以是topic,value是该topic的LogConfig对象
     val configs = AdminUtils.fetchAllTopicConfigs(zkClient).mapValues(LogConfig.fromProps(defaultProps, _))
     // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,

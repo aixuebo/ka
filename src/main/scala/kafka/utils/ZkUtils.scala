@@ -44,6 +44,7 @@ object ZkUtils extends Logging {
     * /consumers/${group}/offsets/${topic}
     * /consumers/${owners}/offsets/${topic}
     * 1./consumers/${group}/ids/${consumerId} 内容{"pattern":"white_list、black_list、static之一","subscription":{"${topic}":2,"${topic}":2}  } 表示该消费者组内的某一个消费者可以消费哪些topic,以及每一个topic消费多少个partition
+    * /consumers/[groupId]/ids/[consumerIdString],其中consumerIdString生成规则即表示此consumer目前所消费的topic + partitions列表.
    */
   val ConsumersPath = "/consumers"
   
@@ -52,6 +53,12 @@ object ZkUtils extends Logging {
     /**
 1./brokers/topics/${topic}/partitions/${partitionId}/state 内容{leader:int,leader_epoch:int,isr:List[int],controller_epoch:int}
   存储该topic-partition的状态信息,即对应的实体是LeaderIsrAndControllerEpoch对象
+"controller_epoch": 表示kafka集群中的中央控制器选举次数,
+"leader": 表示该partition选举leader的brokerId,
+"version": 版本编号默认为1,
+"leader_epoch": 该partition leader选举次数,
+"isr": [同步副本组brokerId列表]
+  
 2.从路径可以获取所有的topic-partition集合
 3.从路径可以获取所有的topic集合
 4./brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId备份存储
@@ -60,10 +67,26 @@ object ZkUtils extends Logging {
   val BrokerTopicsPath = "/brokers/topics"
   
   
+  ///config/topics/${topic}节点的内容是该topic的配置信息
+  //内容格式:{version:1,config:{key=value,key=value}}
   val TopicConfigPath = "/config/topics"
-  val TopicConfigChangesPath = "/config/changes"
+  
+  /**
+   * /config/changes的子节点命名规则:
+   * 参数name是以config_change_开头 + 数字,返回该数字
+   * eg:config_change_5
+   * 并且config_change_5节点的内容是改节点对应的topic名称,通过该名称,查询属性TopicConfigPath,从而获取/config/topics/${topic}节点的内容是该topic的配置信息
+   * 
+   * 该/config/changes节点属于临时配置一些更改内容的topic子节点,超过一定时间后,该子节点会被删除掉
+   */
+  val TopicConfigChangesPath = "/config/changes"//参见TopicConfigManager类
+    
   val ControllerPath = "/controller"//是json格式,解析的内容是哪个broker节点是kafka主节点,存储内容:{brokerid:5}
+    /**
+controller_epoch节点的值是一个数字,kafka集群中第一个broker第一次启动时为1，以后只要集群中center controller中央控制器所在broker变更或挂掉，就会重新选举新的center controller，每次center controller变更controller_epoch值就会 + 1; 
+     */
   val ControllerEpochPath = "/controller_epoch"
+  
   val ReassignPartitionsPath = "/admin/reassign_partitions"
   val DeleteTopicsPath = "/admin/delete_topics"
   val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"

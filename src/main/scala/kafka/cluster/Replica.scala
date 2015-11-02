@@ -31,6 +31,10 @@ import java.util.concurrent.atomic.AtomicLong
 
 该对象表示一个备份,在brokerId节点备份Partition对象,即topic-partition的一个备份
  */
+
+/**
+ * log参数是该节点上存储该partition的日志文件
+ */
 class Replica(val brokerId: Int,
               val partition: Partition,
               time: Time = SystemTime,
@@ -81,6 +85,7 @@ class Replica(val brokerId: Int,
   def logEndOffsetUpdateTimeMs = logEndOffsetUpdateTimeMsValue.get()
 
   //为本地的日志文件设置commit数据位置
+  //表示本地的该partiton文件已经同步到leader的哪个位置了
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {
       highWatermarkMetadata = newHighWatermark

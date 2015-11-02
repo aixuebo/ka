@@ -327,6 +327,7 @@ abstract class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInt
 
     /**
      * Delete all satisfied events from the delay queue and the watcher lists
+     * 从该队列中删除所有满足的事件,返回删除的个数
      */
     private def purgeSatisfied(): Int = {
       var purged = 0

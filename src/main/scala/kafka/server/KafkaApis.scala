@@ -286,10 +286,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     trace("Append [%s] to local log ".format(partitionAndData.toString))
     partitionAndData.map {case (topicAndPartition, messages) =>
       try {
+        //校验,不允许追加kafka内部的topic,即__consumer_offsets,并且isOffsetCommit=true与__consumer_offsets是topic相对应
         if (Topic.InternalTopics.contains(topicAndPartition.topic) &&
             !(isOffsetCommit && topicAndPartition.topic == OffsetManager.OffsetsTopicName)) {
           throw new InvalidTopicException("Cannot append to internal topic %s".format(topicAndPartition.topic))
         }
+        //获取对应的partition对象
         val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
         val info = partitionOpt match {
           case Some(partition) =>
@@ -404,6 +406,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleOffsetRequest(request: RequestChannel.Request) {
     val offsetRequest = request.requestObj.asInstanceOf[OffsetRequest]
+    //offsetRequest.requestInfo表示TopicAndPartition, PartitionOffsetRequestInfo
     val responseMap = offsetRequest.requestInfo.map(elem => {
       val (topicAndPartition, partitionOffsetRequestInfo) = elem
       try {

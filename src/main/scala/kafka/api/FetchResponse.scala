@@ -44,6 +44,9 @@ object FetchResponsePartitionData {
     4 /* messageSetSize */
 }
 
+/**
+ * hw 表示leader的partition数据已经写入到log文件的哪个字节位置
+ */
 case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError, hw: Long = -1L, messages: MessageSet) {
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
 }

@@ -31,6 +31,7 @@ class ProducerRequestPurgatory(replicaManager: ReplicaManager, offsetManager: Of
   extends RequestPurgatory[DelayedProduce](replicaManager.config.brokerId, replicaManager.config.producerPurgatoryPurgeIntervalRequests) {
   this.logIdent = "[ProducerRequestPurgatory-%d] ".format(replicaManager.config.brokerId)
 
+  //每一个TopicAndPartition对应一个统计对象DelayedProducerRequestMetrics
   private class DelayedProducerRequestMetrics(metricId: Option[TopicAndPartition]) extends KafkaMetricsGroup {
     val tags: scala.collection.Map[String, String] = metricId match {
       case Some(topicAndPartition) => Map("topic" -> topicAndPartition.topic, "partition" -> topicAndPartition.partition.toString)
@@ -40,6 +41,9 @@ class ProducerRequestPurgatory(replicaManager: ReplicaManager, offsetManager: Of
     val expiredRequestMeter = newMeter("ExpiresPerSecond", "requests", TimeUnit.SECONDS, tags)
   }
 
+  /**
+   * 对应关系TopicAndPartition--DelayedProducerRequestMetrics
+   */
   private val producerRequestMetricsForKey = {
     val valueFactory = (k: TopicAndPartition) => new DelayedProducerRequestMetrics(Some(k))
     new Pool[TopicAndPartition, DelayedProducerRequestMetrics](Some(valueFactory))

@@ -24,7 +24,11 @@ import collection.JavaConversions
 import kafka.common.KafkaException
 import java.lang.Object
 
-
+/**
+ * 内部就是一个map,存储key和value
+ * 
+ * 参数valueFactory: Option[(K) => V] = None 表示通过k转换成v的函数,返回值是Option
+ */
 class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] {
 
   private val pool = new ConcurrentHashMap[K, V]
@@ -49,6 +53,7 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
    * @return The final value associated with the key. This may be different from
    *         the value created by the factory if another thread successfully
    *         put a value.
+   * 通过key获取对应的value,如果不存在,则通过key创建一个v,并且添加到map中       
    */
   def getAndMaybePut(key: K) = {
     if (valueFactory.isEmpty)
@@ -72,11 +77,13 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
   
   def remove(key: K): V = pool.remove(key)
   
+  //返回所有的key集合
   def keys: mutable.Set[K] = {
     import JavaConversions._
     pool.keySet()
   }
   
+  //循环所有的value
   def values: Iterable[V] = {
     import JavaConversions._
     new ArrayList[V](pool.values())

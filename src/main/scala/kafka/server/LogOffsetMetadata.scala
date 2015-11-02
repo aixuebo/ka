@@ -34,7 +34,7 @@ object LogOffsetMetadata {
 
 /*
  * A log offset structure, including:
- *  1. the message offset
+ *  1. the message offset 该partition的总字节位置
  *  2. the base message offset of the located segment
  *  3. the physical position on the located segment
  */
