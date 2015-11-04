@@ -64,6 +64,7 @@ class ControllerContext(val zkClient: ZkClient,
   //key是topic-partition对象,value是该partition的备份的ID集合
   var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty
   
+  //key是topic-partition value是该partition对应的leader节点等信息对象
   var partitionLeadershipInfo: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
   var partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap
   var partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet
@@ -107,9 +108,7 @@ class ControllerContext(val zkClient: ZkClient,
    */
   def replicasOnBrokers(brokerIds: Set[Int]): Set[PartitionAndReplica] = {
     brokerIds.map { brokerId =>
-      partitionReplicaAssignment
-        .filter { case(topicAndPartition, replicas) => replicas.contains(brokerId) }
-        .map { case(topicAndPartition, replicas) =>
+      partitionReplicaAssignment.filter { case(topicAndPartition, replicas) => replicas.contains(brokerId) }.map { case(topicAndPartition, replicas) =>
                  new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, brokerId) }
     }.flatten.toSet
   }

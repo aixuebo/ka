@@ -203,6 +203,7 @@ class RequestSendThread(val controllerId: Int,//当前controller的broker节点I
   }
 }
 
+//该类与ReplicaStateMachine类、PartitionStateMachine类关系较大
 class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging {
   val controllerContext = controller.controllerContext
   val controllerId: Int = controller.config.brokerId
@@ -225,6 +226,16 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         "new one. Some UpdateMetadata state changes %s might be lost ".format(updateMetadataRequestMap.toString()))
   }
 
+  /**
+   * 该方法作用流程:
+   * a.为参数1 brokerIds集合都是参数2和3组成的topic-partition上的备份节点的follow集合
+   * b.参数leaderIsrAndControllerEpoch表示该topic-partition上leader等信息
+   * c.参数replicas,表示已知该topic-partition上备份在哪些broker节点集合中
+   * d.参数callback表示执行完调用回调函数
+   * 
+   * 主要作用:
+   * 将topic-partition的follow节点集合brokerIds添加到leader集合内,即添加leader和follow的对应关系
+   */
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int,
                                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        replicas: Seq[Int], callback: (RequestOrResponse) => Unit = null) {

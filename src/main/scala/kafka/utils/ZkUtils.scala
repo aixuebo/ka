@@ -45,10 +45,25 @@ object ZkUtils extends Logging {
     * /consumers/${owners}/offsets/${topic}
     * 1./consumers/${group}/ids/${consumerId} 内容{"pattern":"white_list、black_list、static之一","subscription":{"${topic}":2,"${topic}":2}  } 表示该消费者组内的某一个消费者可以消费哪些topic,以及每一个topic消费多少个partition
     * /consumers/[groupId]/ids/[consumerIdString],其中consumerIdString生成规则即表示此consumer目前所消费的topic + partitions列表.
+    * 2./consumers/[groupId]/offsets/[topic]/[partitionId] 存储 long (offset)
+                      用来跟踪每个consumer目前所消费的partition中最大的offset
+                      此znode为持久节点,可以看出offset跟group_id有关,以表明当消费者组(consumer group)中一个消费者失效,
+                      重新触发balance,其他consumer可以继续消费.
+     *3./consumers/${group}/ids/消费者自定义ID名称,该意义是可以知道该group下面的消费者多少个,如果挂了一个消费者,或者挂了一个broker,可以动态调节消费者消费哪些topic-partition,内容如下:
+       {
+      “version”:1,
+      “subscription”:{“test_kafka”:3},//订阅topic列表
+      “topic名称”: consumer中topic消费者线程数[与队列的分区数量有关]
+      “pattern”:”static”,
+      “timestamp”:”1416810012297″
+      } 
+     * 4.consumers/[groupId]/owners/[topic]/[partitionId]/consumer_thread
+                          用来保存每个topic的的partition的是由那个消费者线程进行消费的信息。
    */
   val ConsumersPath = "/consumers"
   
-  //集群的所有broker的ID集合作为他的子节点,例如 /brokers/ids/1 /brokers/ids/2 表示有2个broker节点,每一个节点的内容是 Json.encode(Map("version" -> 1, "host" -> host, "port" -> port, "jmx_port" -> jmxPort, "timestamp" -> timestamp)) 
+  //集群的所有broker的ID集合作为他的子节点,例如 /brokers/ids/1 /brokers/ids/2 表示有2个broker节点,每一个节点的内容是 Json.encode(Map("version" -> 1, "host" -> host, "port" -> port, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
+    //ReplicaStateMachine类注册了该监听事件
   val BrokerIdsPath = "/brokers/ids"
     /**
 1./brokers/topics/${topic}/partitions/${partitionId}/state 内容{leader:int,leader_epoch:int,isr:List[int],controller_epoch:int}
@@ -63,6 +78,8 @@ object ZkUtils extends Logging {
 3.从路径可以获取所有的topic集合
 4./brokers/topics/${topic}的内容{partitions:{"1":[11,12,14],"2":[11,16,19]} } 含义是该topic中有两个partition,分别是1和2,每一个partition在哪些brokerId备份存储
 5.通过4可以获取topic-partition,该组合都在哪些节点有备份
+6.PartitionStateMachine类注册了该监听事件 
+7./brokers/topics/${topic}节点上 参见PartitionStateMachine类注册了该监听事件 
 */
   val BrokerTopicsPath = "/brokers/topics"
   
@@ -87,8 +104,48 @@ controller_epoch节点的值是一个数字,kafka集群中第一个broker第一�
      */
   val ControllerEpochPath = "/controller_epoch"
   
+/**
+/admin/reassign_partitions内容
+{
+  "version": 1,
+  "partitions":
+     [
+        {
+            "topic": "Foo",
+            "partition": 1,
+            "replicas": [0, 1, 3]
+        }
+     ]            
+}
+ */
   val ReassignPartitionsPath = "/admin/reassign_partitions"
+/**
+/admin/delete_topics内容 
+{
+  "version": 1,
+  "topics": ["foo", "bar"]
+}
+*/
+  //参见PartitionStateMachine类注册了该监听事件 
   val DeleteTopicsPath = "/admin/delete_topics"
+  
+/**
+/admin/preferred_replica_election内容
+{
+  "version": 1,
+  "partitions":
+     [
+        {
+            "topic": "Foo",
+            "partition": 1         
+        },
+        {
+            "topic": "Bar",
+            "partition": 0         
+        }
+     ]            
+}
+ */
   val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
 
   //return /brokers/topics/${topic}

@@ -74,7 +74,9 @@ class TopicDeletionManager(controller: KafkaController,
   val partitionStateMachine = controller.partitionStateMachine
   val replicaStateMachine = controller.replicaStateMachine
   
+  //存储要删除的topic集合
   val topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String] ++ initialTopicsToBeDeleted
+  //根据要删除的topic集合,查找这些topic所对应的所有TopicAndPartition集合,即要被删除的TopicAndPartition集合
   val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
   
   val deleteLock = new ReentrantLock()
@@ -82,9 +84,9 @@ class TopicDeletionManager(controller: KafkaController,
   val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
     (initialTopicsIneligibleForDeletion & initialTopicsToBeDeleted)
   val deleteTopicsCond = deleteLock.newCondition()
-  val deleteTopicStateChanged: AtomicBoolean = new AtomicBoolean(false)
-  var deleteTopicsThread: DeleteTopicsThread = null
-  val isDeleteTopicEnabled = controller.config.deleteTopicEnable
+  val deleteTopicStateChanged: AtomicBoolean = new AtomicBoolean(false)//true表示有topic要被去删除,需要DeleteTopicsThread线程执行
+  var deleteTopicsThread: DeleteTopicsThread = null//真正去删除topic的线程
+  val isDeleteTopicEnabled = controller.config.deleteTopicEnable//只有该值为true时,才表示允许进行topic删除操作
 
   /**
    * Invoked at the end of new controller initiation
@@ -118,7 +120,12 @@ class TopicDeletionManager(controller: KafkaController,
    * Invoked by the child change listener on /admin/delete_topics to queue up the topics for deletion. The topic gets added
    * to the topicsToBeDeleted list and only gets removed from the list when the topic deletion has completed successfully
    * i.e. all replicas of all partitions of that topic are deleted successfully.
-   * @param topics Topics that should be deleted
+   * 
+   * 监听/admin/delete_topics子节点,即等待删除的topic,将该topic调用该方法,进行删除该topic的partition和备份信息,一旦删除成功完成,则移除该/admin/delete_topics中topic节点
+   * 例如:该topic的所有的partitions的所有的replicas都被删除后,则认为是成功删除topic,则移除/admin/delete_topics/topic节点
+   * @param topics Topics that should be deleted 参数表示要删除的topic集合
+   * 将要删除的topic集合添加到topicsToBeDeleted队列中
+   * 将要删除的topic集合对应的Partition集合添加到partitionsToBeDeleted队列中
    */
   def enqueueTopicsForDeletion(topics: Set[String]) {
     if(isDeleteTopicEnabled) {
@@ -138,7 +145,7 @@ class TopicDeletionManager(controller: KafkaController,
    */
   def resumeDeletionForTopics(topics: Set[String] = Set.empty) {
     if(isDeleteTopicEnabled) {
-      val topicsToResumeDeletion = topics & topicsToBeDeleted
+      val topicsToResumeDeletion = topics & topicsToBeDeleted//获取集合交集
       if(topicsToResumeDeletion.size > 0) {
         topicsIneligibleForDeletion --= topicsToResumeDeletion
         resumeTopicDeletionThread()
@@ -273,6 +280,7 @@ class TopicDeletionManager(controller: KafkaController,
     controller.replicaStateMachine.handleStateChanges(failedReplicas, OfflineReplica)
   }
 
+  //该方法指代topic所有的partition的replica备份都已经删除完成,因此该topic也要删除掉
   private def completeDeleteTopic(topic: String) {
     // deregister partition change listener on the deleted topic. This is to prevent the partition change listener
     // firing before the new topic listener when a deleted topic gets auto created
@@ -391,13 +399,17 @@ class TopicDeletionManager(controller: KafkaController,
         return
 
       inLock(controllerContext.controllerLock) {
+        
+        //copy等待删除的topic
         val topicsQueuedForDeletion = Set.empty[String] ++ topicsToBeDeleted
 
+        //打印将要删除的topic集合
         if(!topicsQueuedForDeletion.isEmpty)
           info("Handling deletion for topics " + topicsQueuedForDeletion.mkString(","))
 
+          //一个一个topic进行删除
         topicsQueuedForDeletion.foreach { topic =>
-        // if all replicas are marked as deleted successfully, then topic deletion is done
+        // if all replicas are marked as deleted successfully, then topic deletion is done表示该topic所有的replicas都删除成功
           if(controller.replicaStateMachine.areAllReplicasForTopicDeleted(topic)) {
             // clear up all state for this topic from controller cache and zookeeper
             completeDeleteTopic(topic)
