@@ -509,6 +509,11 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
    * 1. Registers partition change listener. This is not required until KAFKA-347
    * 2. Invokes the new partition callback
    * 3. Send metadata request with the new topic to all brokers so they allow requests for that topic to be served
+   * 
+   * 参数topics 是新添加的topic集合
+   * 参数newPartitions,因为每一个topic有若干个partition,因此新添加的topic集合,就有N个topic-partition集合
+   * 作用:
+   * 对新添加的topic进行分配,将topic-partition分配到不同节点中
    */
   def onNewTopicCreation(topics: Set[String], newPartitions: Set[TopicAndPartition]) {
     info("New topic creation callback for %s".format(newPartitions.mkString(",")))

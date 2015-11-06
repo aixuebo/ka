@@ -202,6 +202,7 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
 /**
  * Essentially does nothing. Returns the current leader and ISR, and the current
  * set of replicas assigned to a given topic/partition.
+ * 本质上什么都没有做,只是返回了参数作为leader,partition对应的所有备份ID集合作为元组的第二个参数被返回
  */
 class NoOpLeaderSelector(controllerContext: ControllerContext) extends PartitionLeaderSelector with Logging {
 
@@ -209,6 +210,7 @@ class NoOpLeaderSelector(controllerContext: ControllerContext) extends Partition
 
   def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     warn("I should never have been asked to perform leader election, returning the current LeaderAndIsr and replica assignment.")
+    //  controllerContext.partitionReplicaAssignment:key是topic-partition对象,value是该partition的备份的ID集合
     (currentLeaderAndIsr, controllerContext.partitionReplicaAssignment(topicAndPartition))
   }
 }

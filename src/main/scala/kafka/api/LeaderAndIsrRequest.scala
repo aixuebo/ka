@@ -28,7 +28,7 @@ import kafka.common.ErrorMapping
 import kafka.network.RequestChannel.Response
 import collection.Set
 
-
+//isr:in-sync reassigned replica同步重新分配replica 
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0

@@ -126,18 +126,20 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
    * This API invokes the OnlinePartition state change on all partitions in either the NewPartition or OfflinePartition
    * state. This is called on a successful controller election and on broker changes
+   * 针对不是删除的topic进行以下逻辑处理,将OfflinePartition或者NewPartition的状态转换成OnlinePartition状态
    */
   def triggerOnlinePartitionStateChange() {
     try {
       brokerRequestBatch.newBatch()
       // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state except partitions
       // that belong to topics to be deleted
+      //循环每一个partition,如果该partition对应的topic暂时不是要删除状态时,则进行处理逻辑
       for((topicAndPartition, partitionState) <- partitionState
-          if(!controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic))) {
-        if(partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
-          handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
-                            (new CallbackBuilder).build)
-      }
+          if(!controller.deleteTopicManager.isTopicQueuedUpForDeletion(topicAndPartition.topic))) {//针对不是删除的topic进行以下逻辑处理,将OfflinePartition或者NewPartition的状态转换成OnlinePartition状态
+            if(partitionState.equals(OfflinePartition) || partitionState.equals(NewPartition))
+              handleStateChange(topicAndPartition.topic, topicAndPartition.partition, OnlinePartition, controller.offlinePartitionSelector,
+                                (new CallbackBuilder).build)
+          }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
     } catch {
       case e: Throwable => error("Error while moving some partitions to the online state", e)
@@ -465,19 +467,29 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           try {
+            //获取现在拥有的全部topic
             val currentChildren = {
               import JavaConversions._
               debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
               (children: Buffer[String]).toSet
             }
+            //做差值,获取新添加的topic集合
             val newTopics = currentChildren -- controllerContext.allTopics
+            //做差值,获取已经删除的topic
             val deletedTopics = controllerContext.allTopics -- currentChildren
+            //更新现在已经获取的最新topic集合
             controllerContext.allTopics = currentChildren
 
+            // 返回值:Map[TopicAndPartition, Seq[Int]]记录这些新增加的topic-partition在哪些broker节点上 
             val addedPartitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, newTopics.toSeq)
+            
+            //过滤已经不存在的topic-partition映射关系,返回值还是key是topic-partition对象,value是该partition的备份的ID集合
             controllerContext.partitionReplicaAssignment = controllerContext.partitionReplicaAssignment.filter(p =>
               !deletedTopics.contains(p._1.topic))
+             
+            //将新添加的topic-partition在哪些broker节点上信息追加到全局中
             controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
+            //记录日志,新topic……已经删除的topic……,以及新添加的topic-partition分布在哪些节点上
             info("New topics: [%s], deleted topics: [%s], new partition replica assignment [%s]".format(newTopics,
               deletedTopics, addedPartitionReplicaAssignment))
             if(newTopics.size > 0)
@@ -508,25 +520,29 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, children : java.util.List[String]) {
       inLock(controllerContext.controllerLock) {
+        //获取将要删除的topic集合
         var topicsToBeDeleted = {
           import JavaConversions._
           (children: Buffer[String]).toSet
         }
+        //打印要删除哪些topic集合
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
+        //查找要删除,但是已经不存在的topic集合
         val nonExistentTopics = topicsToBeDeleted.filter(t => !controllerContext.allTopics.contains(t))
-        if(nonExistentTopics.size > 0) {
+        if(nonExistentTopics.size > 0) {//如果存在,则真正去删除zookeeper节点,/admin/delete_topics/${topic},因为已经topic不存在了
           warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
           nonExistentTopics.foreach(topic => ZkUtils.deletePathRecursive(zkClient, ZkUtils.getDeleteTopicPath(topic)))
         }
+        //过滤获取剩余的要删除的topic集合
         topicsToBeDeleted --= nonExistentTopics
         if(topicsToBeDeleted.size > 0) {
           info("Starting topic deletion for topics " + topicsToBeDeleted.mkString(","))
           // mark topic ineligible for deletion if other state changes are in progress
           topicsToBeDeleted.foreach { topic =>
             val preferredReplicaElectionInProgress =
-              controllerContext.partitionsUndergoingPreferredReplicaElection.map(_.topic).contains(topic)
+              controllerContext.partitionsUndergoingPreferredReplicaElection.map(_.topic).contains(topic)//是否包含该topic
             val partitionReassignmentInProgress =
-              controllerContext.partitionsBeingReassigned.keySet.map(_.topic).contains(topic)
+              controllerContext.partitionsBeingReassigned.keySet.map(_.topic).contains(topic)//是否包含该topic
             if(preferredReplicaElectionInProgress || partitionReassignmentInProgress)
               controller.deleteTopicManager.markTopicIneligibleForDeletion(Set(topic))
           }
@@ -555,9 +571,14 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       inLock(controllerContext.controllerLock) {
         try {
           info("Add Partition triggered " + data.toString + " for path " + dataPath)
+          //Map[TopicAndPartition, Seq[Int]] key是topic-partition,value是该partition都在哪些节点有备份 ,即获取该topic对应在哪些节点上运行topic-partition
           val partitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, List(topic))
+          
+          //过滤已经不存在的topic-partition,返回值Map[TopicAndPartition, Seq[Int] ]
           val partitionsToBeAdded = partitionReplicaAssignment.filter(p =>
             !controllerContext.partitionReplicaAssignment.contains(p._1))
+            
+            //校验该topic是否已经准备删除,如果是准备删除,则要打印日志,说明这些节点要删除gaugetopic数据
           if(controller.deleteTopicManager.isTopicQueuedUpForDeletion(topic))
             error("Skipping adding partitions %s for topic %s since it is currently being deleted"
                   .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
