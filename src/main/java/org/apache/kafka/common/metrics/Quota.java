@@ -18,21 +18,24 @@ package org.apache.kafka.common.metrics;
 
 /**
  * An upper or lower bound for metrics
+ * 配额对象
  */
 public final class Quota {
 
-    private final boolean upper;
-    private final double bound;
+    private final boolean upper;//true表示上限,false表示下限
+    private final double bound;//
 
     public Quota(double bound, boolean upper) {
         this.bound = bound;
         this.upper = upper;
     }
 
+    //表示最多允许到upperBound
     public static Quota lessThan(double upperBound) {
         return new Quota(upperBound, true);
     }
 
+    //表示至少upperBound
     public static Quota moreThan(double lowerBound) {
         return new Quota(lowerBound, false);
     }
@@ -45,6 +48,8 @@ public final class Quota {
         return this.bound;
     }
 
+    //判断是否能允许该value值,true表示允许
+    //upper为true,表示上限,因此value一定要小于bound,否则value一定要大于bound
     public boolean acceptable(double value) {
         return (upper && value <= bound) || (!upper && value >= bound);
     }

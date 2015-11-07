@@ -32,12 +32,14 @@ public class ByteBufferOutputStream extends OutputStream {
         this.buffer = buffer;
     }
 
+    //写入一个byte到输出流中
     public void write(int b) {
         if (buffer.remaining() < 1)
             expandBuffer(buffer.capacity() + 1);
         buffer.put((byte) b);
     }
 
+    //将字节数组bytes写入到输出流中,从数组的off开始写入,写入长度为len
     public void write(byte[] bytes, int off, int len) {
         if (buffer.remaining() < len)
             expandBuffer(buffer.capacity() + len);
@@ -48,10 +50,11 @@ public class ByteBufferOutputStream extends OutputStream {
         return buffer;
     }
 
+    //扩容,线程不安全
     private void expandBuffer(int size) {
         int expandSize = Math.max((int) (buffer.capacity() * REALLOCATION_FACTOR), size);
-        ByteBuffer temp = ByteBuffer.allocate(expandSize);
-        temp.put(buffer.array(), buffer.arrayOffset(), buffer.position());
-        buffer = temp;
+        ByteBuffer temp = ByteBuffer.allocate(expandSize);//创建新的缓冲池
+        temp.put(buffer.array(), buffer.arrayOffset(), buffer.position());//复制到新的缓冲池中
+        buffer = temp;//替换缓冲池
     }
 }

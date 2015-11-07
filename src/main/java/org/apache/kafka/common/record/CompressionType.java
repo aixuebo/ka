@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 /**
  * The compression type to use
+ * 压缩类型
  */
 public enum CompressionType {
     NONE(0, "none", 1.0f), GZIP(1, "gzip", 0.5f), SNAPPY(2, "snappy", 0.5f), LZ4(3, "lz4", 0.5f);

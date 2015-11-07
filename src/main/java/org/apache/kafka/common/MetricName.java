@@ -56,10 +56,10 @@ import org.apache.kafka.common.utils.Utils;
  */
 public final class MetricName {
 
-    private final String name;
-    private final String group;
-    private final String description;
-    private Map<String, String> tags;
+    private final String name;//统计的key
+    private final String group;//该key所在的组
+    private final String description;//该key的描述
+    private Map<String, String> tags;//为该key分配各种属性键值对
     private int hash = 0;
 
     /**
@@ -85,6 +85,9 @@ public final class MetricName {
         this(name, group, description, getTags(keyValue));
     }
 
+    /**
+     * 数组转换成Map
+     */
     private static Map<String, String> getTags(String... keyValue) {
         if ((keyValue.length % 2) != 0)
             throw new IllegalArgumentException("keyValue needs to be specified in paris");

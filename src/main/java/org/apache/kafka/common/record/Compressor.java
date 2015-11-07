@@ -32,9 +32,9 @@ public class Compressor {
 
     static private final float COMPRESSION_RATE_DAMPING_FACTOR = 0.9f;
     static private final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
-    static private final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;
+    static private final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;//默认ByteBuffer缓冲区大小
 
-    private static float[] typeToRate;
+    private static float[] typeToRate;//数组的下标是压缩类型的ID,数组的值是该压缩类型对应的rate值
     private static int MAX_TYPE_ID = -1;
 
     static {
@@ -47,22 +47,22 @@ public class Compressor {
         }
     }
 
-    private final CompressionType type;
-    private final DataOutputStream appendStream;
-    private final ByteBufferOutputStream bufferStream;
-    private final int initPos;
+    private final CompressionType type;//压缩类型
+    private final ByteBufferOutputStream bufferStream;//输出流
+    private final DataOutputStream appendStream;//输出流,进行最后编码后的输出流
+    private final int initPos;//初始化时,ByteBuffer在什么位置
 
     public long writtenUncompressed;
     public long numRecords;
 
     public Compressor(ByteBuffer buffer, CompressionType type, int blockSize) {
         this.type = type;
-        this.initPos = buffer.position();
+        this.initPos = buffer.position();//记录ByteBuffer传递进来的时候已经存在的位置
 
         this.numRecords = 0;
         this.writtenUncompressed = 0;
 
-        if (type != CompressionType.NONE) {
+        if (type != CompressionType.NONE) {//如果需要压缩,则要记录头信息,因此把头信息要预先空出来
             // for compressed records, leave space for the header and the shallow message metadata
             // and move the starting position to the value payload offset
             buffer.position(initPos + Records.LOG_OVERHEAD + Record.RECORD_OVERHEAD);
@@ -77,6 +77,7 @@ public class Compressor {
         this(buffer, type, COMPRESSION_DEFAULT_BUFFER_SIZE);
     }
 
+    //返回当前的ByteBuffer对象
     public ByteBuffer buffer() {
         return bufferStream.buffer();
     }
@@ -197,7 +198,7 @@ public class Compressor {
     }
 
     // the following two functions also need to be public since they are used in MemoryRecords.iteration
-
+    //用CompressionType类型的压缩方式,将数据压缩写入到ByteBufferOutputStream中
     static public DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, int bufferSize) {
         try {
             switch (type) {
@@ -233,6 +234,7 @@ public class Compressor {
         }
     }
 
+    //CompressionType压缩类型,读取的ByteBufferInputStream输入流,需要将ByteBufferInputStream流按照CompressionType类型方式去解码
     static public DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type) {
         try {
             switch (type) {
